@@ -10,3 +10,11 @@ tools/.bin/
 *.database*
 settings.json
 test-results/
+.env
+.env.*
+!.env.example
+.codex/
+.claude/
+**/auth.json
+**/.credentials.json
+**/WebView2/

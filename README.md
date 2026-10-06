@@ -1,65 +1,77 @@
-# PC / AI Dashboard
+# PC / AI Dashboard · Windows
 
-Windows-App für einen eingebauten HDMI-Monitor. Zeigt Hardware und Claude-/Codex-Verbrauch gemeinsam an, mit optionalem Video-Hintergrund. C# / .NET 10, WPF, WebView2 und TypeScript. Für 1024 × 600 entworfen, proportional skalierbar.
+[![Windows build](https://github.com/pezezzle/pc-ai-dashboard/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/pezezzle/pc-ai-dashboard/actions/workflows/build.yml)
+[![Last commit](https://img.shields.io/github/last-commit/pezezzle/pc-ai-dashboard/main)](https://github.com/pezezzle/pc-ai-dashboard/commits/main)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![WPF](https://img.shields.io/badge/UI-WPF%20%2B%20WebView2-0078D4)](docs/ARCHITECTURE.md)
+[![TypeScript 5.9](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4)](docs/SETUP.md)
 
-## Start
+Windows dashboard for a small HDMI monitor inside a PC. Displays hardware telemetry, Claude and Codex account usage, and chat context measurements over a local video or YouTube background. Development version **1.0.1**. The host uses C# / .NET 10 and WPF; the interface uses TypeScript in WebView2. The user interface is German; source comments, tests, build messages, and documentation are English.
 
-Nach dem Build `Start-App.cmd` oder `artifacts/app/PcAiDashboard.exe` öffnen. Der kleinste Monitor wird beim ersten Start gewählt. Über ⚙ kann der Monitor geändert werden. F11 wechselt Vollbild; Esc öffnet den Fenstermodus. Das Symbol im Infobereich öffnet Einstellungen und beendet die App.
+**Project status:** The Windows build, all 20 data/protocol checks, and all 5 interface tests pass. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
 
-Voraussetzungen: Windows 10/11, WebView2 Runtime, Aquasuite mit aktivem CPU-Package-Export, ein OCTO für dessen direkte Sensoren, NVIDIA-Treiber mit `nvidia-smi`, angemeldetes Codex CLI und Claude Desktop oder Claude Code. Der veröffentlichte App-Ordner enthält die .NET-Laufzeit.
+## Features
 
-## Build & Prüfung
+- CPU package temperature and total usage; GPU core temperature and usage; physical RAM and fixed-drive storage usage.
+- Pump, radiator, and case temperatures; pump RPM and top, side, bottom, and rear fan RPM from an Aqua Computer OCTO.
+- Claude and Codex account usage windows, reset countdowns, and per-session context measurements.
+- Looping local MP4/WebM backgrounds and an embedded YouTube player with playback, volume, and mute controls.
+- Monitor selection, fullscreen, tray controls, optional Windows autostart, and automatically saved accent/text colors, card opacity, and background dimming.
 
-Entwicklungswerkzeuge: .NET 10 SDK, Node.js, npm und Microsoft Edge für die UI-Tests.
+Hardware access is read-only. The app does not change pump speeds, fan curves, or cooling-controller settings.
 
-```powershell
-./Build.ps1 -Publish -Verify
-```
+## Getting started
 
-Der App-Ordner muss vollständig erhalten bleiben; die EXE allein reicht nicht. Quellcode und generiertes `Web/main.js` werden gemeinsam versioniert. Builds und private Laufzeitdaten sind ausgeschlossen.
+The current hardware adapters require an Aqua Computer OCTO, Aquasuite, and an NVIDIA GPU with `nvidia-smi`. Windows CPU, RAM, and drive readings do not depend on the OCTO. Unavailable readings remain visibly unavailable.
 
-## Hardware
+1. Install the [development prerequisites](docs/SETUP.md#prerequisites) and configure the [Aquasuite export](docs/SETUP.md#aquasuite-cpu-temperature-export).
+2. Build from PowerShell in the repository folder:
 
-- OCTO: vier physische Temperaturkanäle und acht Lüfter-/Pumpen-RPM-Kanäle werden ausschließlich aus HID-Statusreports gelesen. Es werden keine Steuerbefehle, PWM- oder Pumpeneinstellungen geschrieben.
-- Zuordnung über Einstellungen, Kanalnummern dort beginnen bei 1. Standard: Pump Coolant 1, Radiator Coolant 3, Case 4; Side 1, Bottom 2, Back 3, Top 4, Pumpe 5. Das ist die Zuordnung dieses PCs.
-- CPU Package: automatischer Aquasuite-Export als XML im Shared Memory mit Namen `PC-AI-Dashboard`, Intervall 1 Sekunde, aktiv. Datenquelle `CPU Package` mit Einheit °C hinzufügen. Dieser Export wurde auf dem Ziel-PC eingerichtet. Aquasuite muss dafür geöffnet bleiben; bei Bedarf startet die App es minimiert.
-- Alternativ ist eine XML-Exportdatei wählbar. Exporte mit mehr als 10 Sekunden Alter werden verworfen. Der Export wird nur gelesen.
-- CPU-Gesamtauslastung: Windows-Systemzeiten. GPU-Core-Temperatur und GPU-Auslastung: NVIDIA, alle 2 Sekunden. RAM: physischer Windows-Arbeitsspeicher. Laufwerke: lokal eingebundene feste Volumes, belegter und freier Speicher.
-- Bei einem Splitter ist die RPM-Anzeige das Tachosignal des angeschlossenen Kanals, kein Mittelwert aller Lüfter.
+   ```powershell
+   .\Build.ps1 -Publish -Verify
+   ```
 
-[Aquasuite-Datenexport, Handbuch Abschnitt 10.4](https://www.aquacomputer.de/tl_files/aquacomputer/downloads/manuals/aquaero_5_aquaero_6_english.pdf). Das OCTO-Statusreport-Layout wurde anhand der [öffentlichen Protokollbeschreibung im liquidctl-Projekt](https://github.com/liquidctl/liquidctl/blob/main/liquidctl/driver/aquacomputer.py) und Live-Reports überprüft. Der Adapter enthält nur eigene Lese- und Dekodierlogik.
+3. Run `Start-App.cmd` or `artifacts/app/PcAiDashboard.exe`.
+4. Open **Einstellungen** using the gear button to choose the monitor, sensor channels, background, and appearance.
 
-## KI-Verbrauch
+The smallest monitor is selected on first startup. The 1024 × 600 layout scales proportionally. **F11** toggles fullscreen; **Esc** switches to windowed mode. The tray menu reopens the dashboard, shows settings, or exits.
 
-Account-Limits werden alle 60 Sekunden aktualisiert. Fehlende Zeitfenster erscheinen nicht als 0 %. Letzte bekannte Werte werden bei Verbindungsfehlern sichtbar als solche dargestellt. Zurücksetzung bedeutet die vom Anbieter angegebene Zeit; die App setzt kein Limit selbst zurück.
+## Download
 
-- Codex: `codex app-server`, dokumentiertes `account/rateLimits/read`. Es werden keine Modellanfragen gestartet. Die Anmeldung bleibt im Codex CLI.
-- Claude: gültige Claude-Code-OAuth-Anmeldung, andernfalls der dedizierte OAuth-Cache der Claude-Desktop-App für den aktuellen Windows-Benutzer. Keine Browsercookies. Entschlüsselung erfolgt lokal über Windows DPAPI und AES-GCM; Tokens werden nur im Arbeitsspeicher verwendet und nicht in Dashboard-Dateien geschrieben. Der OAuth-Usage-Endpunkt ist keine zugesicherte öffentliche API und kann sich ändern. Ist kein gültiger Zugang verfügbar, bleibt die Anzeige ausdrücklich unavailable und kann Werte aus der Code-Statuszeile übernehmen.
-- Codex-Kontext: letzte lokale `token_count`-Messung pro Chat aus den letzten Sitzungsdateien. Die App liest nur die Dateiendstücke und behält keine Gesprächstexte. Der angegebene Zeitstempel bleibt sichtbar; dies ist keine kontinuierliche Messung eines unbenutzten Chats.
-- Claude-Code-Kontext: die Statuszeile schreibt ausschließlich Session-ID, Anzeigename, Kontextmessung und Limits. Die App installiert sie beim ersten Start, falls noch keine Statuszeile existiert. Bestehende Statuszeilen bleiben erhalten. Vorhandene Einstellungen werden vor einer Ergänzung lokal gesichert. Werte stehen ab der nächsten Claude-Code-Sitzung bereit; Kontext aus normalen Claude-Desktop-Chats ist nicht angebunden.
+Successful [Windows build runs](https://github.com/pezezzle/pc-ai-dashboard/actions/workflows/build.yml) provide a `pc-ai-dashboard-win-x64` artifact. GitHub requires sign-in to download Actions artifacts. Extract the entire folder and run `PcAiDashboard.exe`; keep all accompanying files together. The package includes the .NET runtime and requires the Microsoft Edge WebView2 Runtime.
 
-[Codex App Server](https://learn.chatgpt.com/docs/app-server) · [Claude-Code-Statuszeile](https://code.claude.com/docs/en/statusline). Das Windows-Claude-Cacheformat ist auch im [Claude Code Usage Monitor](https://github.com/CodeZeno/Claude-Code-Usage-Monitor/blob/main/src/poller/claude_desktop.rs) dokumentiert. Die Implementierung hier verwendet eigene .NET-Kryptografie und kopiert keinen Fremdcode.
+There is currently no published GitHub Release or installer. Build artifacts are kept outside Git history.
 
-## Video & Ton
+## AI usage and context
 
-Über ⚙ einen YouTube-Link oder eine Video-ID auswählen, oder eine lokale MP4/WebM-Datei. Ton an/aus und Lautstärke sind über die obere Leiste erreichbar. ▶ pausiert oder startet. „Player bedienen“ blendet das Dashboard aus, damit YouTube-Steuerelemente erreichbar bleiben. Die Einstellungen werden lokal gespeichert.
+The large quota percentage shows **usage already consumed**: `100%` used and `0%` remaining are consistent. The reset countdown comes from the provider. Account limits refresh every 60 seconds without starting a model request.
 
-Akzentfarbe, Schriftfarbe, Karten-Deckkraft und Abdunklung werden direkt beim Ändern gespeichert und nach einem Neustart wieder geladen. Die Schriftfarbe gilt auch für die bisher weißen Messwerte, Überschriften und Uhrzeit; Nebenbeschriftungen verwenden eine gedämpfte Variante derselben Farbe.
+Context is a measurement for one chat, not an account-wide allowance. Select a session directly in its provider card. Claude Code context becomes available from the next session after status-line integration; normal Claude Desktop chat context is not connected.
 
-Lokale Videos werden über einen ausschließlich an `127.0.0.1` gebundenen Dienst mit zufälligem Dateizugriffstoken abgespielt. Er liefert nur die ausgewählte Datei, unterstützt HTTP-Bytebereiche einschließlich Positionen über 4 GB und verwendet je Verbindung einen 64-KiB-Arbeitspuffer. Große MP4-Dateien werden nicht als WebView2-Antwortstream über COM übergeben. Damit wird der beim 7,4-GB-Regenvideo beobachtete native Absturz umgangen; ähnliche Stream-Abstürze sind auch im [WebView2-Fehlertracker](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2577) beschrieben.
+The Claude usage integration relies on an unofficial OAuth usage endpoint and may require updates if the provider changes it. See [AI integration details](docs/SETUP.md#ai-integrations).
 
-YouTube ist der reguläre eingebettete Player; blockierte Einbettung, Werbung, Netzwerkausfall und Autoplay-Vorgaben können die Wiedergabe beeinflussen. Ein erster Klick kann erforderlich sein. Das für privaten Gebrauch gewünschte Dashboard-Overlay weicht von YouTubes [Vorgaben zu Overlays](https://developers.google.com/youtube/terms/required-minimum-functionality#overlays-and-frames) ab. Lokale Videos benötigen keine Internetverbindung.
+## Video and appearance
 
-## Daten & Rücknahme
+Choose a background in **Einstellungen → Video & Ton**. Local videos automatically restart at the end. The toolbar controls playback, mute, volume, and the player view. Local files stream in small blocks, including files larger than 4 GB.
 
-Einstellungen, WebView2-Profil, begrenztes Fehlerlog und Claude-Code-Messwerte liegen unter `%LOCALAPPDATA%/PcAiDashboard`. Diese Daten, Zugangsdaten und Diagnosesnapshots werden nicht eingecheckt. Hardwaremesswerte werden nicht hochgeladen. YouTube und die KI-Anbieter werden nur für ihre jeweilige Funktion kontaktiert.
+Under **Anzeige**, **Akzentfarbe** changes highlights and **Schriftfarbe** changes text and measurement colors. Colors, card opacity, and dimming save immediately and survive restart. See [Video and appearance](docs/VIDEO_AND_APPEARANCE.md) for details and YouTube limitations.
 
-Autostart ist standardmäßig aus. Wird er aktiviert, verwendet die App den benutzerspezifischen Windows-Run-Eintrag `PcAiDashboard`. Zur Rücknahme in der App deaktivieren. Zum Entfernen der Claude-Statuszeile den von dieser App gesetzten `statusLine`-Eintrag aus `~/.claude/settings.json` entfernen oder die Sicherung `claude-settings.before-dashboard.json` vergleichen; keine zwischenzeitlichen Änderungen überschreiben.
+## Privacy and security
 
-Diagnose ohne Fenster:
+Credentials are read from the current user's local provider applications at runtime. They are not embedded in source code or written to dashboard files. Settings, the WebView2 profile, limited logs, and Claude Code usage measurements stay in `%LOCALAPPDATA%\PcAiDashboard`.
 
-```powershell
-./artifacts/app/PcAiDashboard.exe --diagnostics "$env:TEMP/dashboard-diagnostics.json"
-```
+Hardware telemetry is not uploaded. YouTube and the AI providers are contacted only for their respective features. Local video streaming listens on loopback only and exposes the selected file through an unpredictable access URL. Read [Security](SECURITY.md) before sharing logs, screenshots, or diagnostics.
 
-Die JSON-Datei enthält Messwerte und Verbrauchsmetadaten, niemals Tokens. Debugging über CDP ist ausschließlich für einen gezielt gestarteten Testprozess vorgesehen und ist im normalen Start deaktiviert.
+## Further documentation
+
+- [Setup, hardware channels, and AI integrations](docs/SETUP.md)
+- [Architecture and local data flow](docs/ARCHITECTURE.md)
+- [Video, audio, and appearance settings](docs/VIDEO_AND_APPEARANCE.md)
+- [Build, testing, diagnostics, and cleanup](docs/BUILD_AND_TEST_STATUS.md)
+- [Changelog](CHANGELOG.md)
+- [Security](SECURITY.md)
+
+## License
+
+No general open-source license has been granted. Public repository access alone is not a license grant. Personal account credentials, private runtime data, and third-party video files are not part of this repository.

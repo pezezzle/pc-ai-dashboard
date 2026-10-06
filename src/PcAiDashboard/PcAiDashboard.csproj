@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Description>Hardware- und KI-Dashboard für das PC-Display</Description>
+    <Description>Hardware and AI usage dashboard for a dedicated Windows display</Description>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>1.0.1</Version>

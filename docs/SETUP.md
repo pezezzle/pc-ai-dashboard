@@ -1,0 +1,83 @@
+# Setup and integrations
+
+## Prerequisites
+
+| Component | Requirement |
+|---|---|
+| Operating system | Windows 10 or 11, x64; live verification was performed on Windows 11 |
+| Display | A normal HDMI monitor; the 1024 × 600 layout scales proportionally |
+| Browser runtime | Microsoft Edge WebView2 Runtime |
+| Cooling controller | Aqua Computer OCTO for the current direct USB sensor adapter |
+| CPU package temperature | Aquasuite with an active XML export |
+| GPU telemetry | NVIDIA GPU and `nvidia-smi` available through the installed driver |
+| Codex account limits | Signed-in Codex CLI with a Windows-native `codex.exe` |
+| Claude account limits | A valid Claude Code or Claude Desktop OAuth session |
+| Claude Code context | Node.js and the dashboard's Claude Code status-line integration |
+| Source builds | .NET 10 SDK, Node.js, npm; Microsoft Edge for interface tests |
+
+GitHub Actions uses Node.js 24 and the .NET 10 SDK. The published Windows folder includes the .NET runtime. It still needs WebView2 and the applications required for the selected sensor and account integrations.
+
+The current adapters were verified with an OCTO and an NVIDIA RTX 4090. AMD/Intel GPU telemetry and other cooling controllers are not implemented by the direct hardware adapter.
+
+## Aquasuite CPU temperature export
+
+1. In Aquasuite, add an automatic data export named `PC-AI-Dashboard`.
+2. Select shared-memory export, enable it, and use a one-second interval.
+3. Add the `CPU Package` temperature source with the unit `°C`.
+4. Keep Aquasuite running. The dashboard can start it minimized if it is not already open.
+5. Use the same shared-memory name under **Einstellungen → Aquasuite & Sensoren**.
+
+An XML export file can be configured instead. The explicit file is authoritative when selected. Exports older than ten seconds are rejected so stale temperatures do not appear live. The dashboard only reads the export.
+
+See [Aquasuite data export, manual section 10.4](https://www.aquacomputer.de/tl_files/aquacomputer/downloads/manuals/aquaero_5_aquaero_6_english.pdf).
+
+## OCTO channel assignment
+
+Settings show channel numbers starting at one. The internal adapter uses zero-based indices.
+
+| Reading | Default UI channel |
+|---|---:|
+| Pump coolant temperature | Temperature 1 |
+| Radiator coolant temperature | Temperature 3 |
+| Case temperature | Temperature 4 |
+| Side fans | Fan 1 |
+| Bottom fans | Fan 2 |
+| Rear fans | Fan 3 |
+| Top fans | Fan 4 |
+| Pump RPM | Fan 5 |
+
+These defaults match the original machine's Aquasuite assignment. Adjust them for another PC. A splitter reports the tachometer signal connected to its channel, not the average RPM of every attached fan.
+
+The adapter reads OCTO HID input reports only. It never sends configuration or speed-control commands. Its layout was checked against the [public liquidctl protocol implementation](https://github.com/liquidctl/liquidctl/blob/main/liquidctl/driver/aquacomputer.py) and live reports. This project contains its own decoding logic.
+
+## Other hardware readings
+
+- CPU total usage comes from Windows system times.
+- NVIDIA core temperature and utilization are collected through `nvidia-smi` every two seconds.
+- RAM shows physical memory currently used and the total installed memory.
+- Storage shows used/free space for mounted fixed volumes. Disconnected drives and unmounted volumes are not included.
+- Hardware snapshots reach the interface once per second. A source may update less frequently.
+
+## AI integrations
+
+### Codex
+
+The app locates the native CLI in the standard npm installation or on `PATH`. It starts `codex app-server`, initializes the connection, reads `account/rateLimits/read`, and closes the child process. No inference request is made. Sign-in remains managed by the Codex CLI.
+
+Usage windows and reset times come from the provider response. Missing windows are omitted rather than displayed as zero usage. The app does not reset or increase an account allowance.
+
+Context comes from recent `token_count` measurements in the tails of local `.codex/sessions` files. The app retains usage metadata, not conversation text. The timestamp identifies the last measured input; an idle chat does not receive continuous context measurements.
+
+Reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server).
+
+### Claude
+
+A valid Claude Code OAuth session is preferred. Otherwise, the app checks the dedicated Claude Desktop OAuth cache for the current Windows user. It does not read browser cookies. Desktop cache decryption uses Windows DPAPI and AES-GCM locally. Decrypted tokens remain in memory for the authenticated usage request; they are not saved in dashboard settings or logs.
+
+The OAuth usage endpoint is not a guaranteed public API. It can change or reject an expired session. Cached limits are marked stale, and missing account access remains explicit. Sign in through the provider application if access has expired.
+
+Claude Code context comes from a Node.js status-line integration. On first startup, the dashboard adds it only when no existing `statusLine` is configured. Existing status lines are preserved, and an existing settings file is backed up before modification. The integration writes session identifiers, display labels, context measurements, and limits into the dashboard's local data folder.
+
+Start a new Claude Code session after installation to receive context measurements. Normal Claude Desktop conversation context is not connected.
+
+References: [Claude Code status line](https://code.claude.com/docs/en/statusline) and [the Windows cache format documented in Claude Code Usage Monitor](https://github.com/CodeZeno/Claude-Code-Usage-Monitor/blob/main/src/poller/claude_desktop.rs). This project uses its own .NET cryptography implementation.
