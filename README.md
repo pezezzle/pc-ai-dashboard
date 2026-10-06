@@ -44,6 +44,10 @@ Account-Limits werden alle 60 Sekunden aktualisiert. Fehlende Zeitfenster ersche
 
 Über ⚙ einen YouTube-Link oder eine Video-ID auswählen, oder eine lokale MP4/WebM-Datei. Ton an/aus und Lautstärke sind über die obere Leiste erreichbar. ▶ pausiert oder startet. „Player bedienen“ blendet das Dashboard aus, damit YouTube-Steuerelemente erreichbar bleiben. Die Einstellungen werden lokal gespeichert.
 
+Akzentfarbe, Schriftfarbe, Karten-Deckkraft und Abdunklung werden direkt beim Ändern gespeichert und nach einem Neustart wieder geladen. Die Schriftfarbe gilt auch für die bisher weißen Messwerte, Überschriften und Uhrzeit; Nebenbeschriftungen verwenden eine gedämpfte Variante derselben Farbe.
+
+Lokale Videos werden über einen ausschließlich an `127.0.0.1` gebundenen Dienst mit zufälligem Dateizugriffstoken abgespielt. Er liefert nur die ausgewählte Datei, unterstützt HTTP-Bytebereiche einschließlich Positionen über 4 GB und verwendet je Verbindung einen 64-KiB-Arbeitspuffer. Große MP4-Dateien werden nicht als WebView2-Antwortstream über COM übergeben. Damit wird der beim 7,4-GB-Regenvideo beobachtete native Absturz umgangen; ähnliche Stream-Abstürze sind auch im [WebView2-Fehlertracker](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2577) beschrieben.
+
 YouTube ist der reguläre eingebettete Player; blockierte Einbettung, Werbung, Netzwerkausfall und Autoplay-Vorgaben können die Wiedergabe beeinflussen. Ein erster Klick kann erforderlich sein. Das für privaten Gebrauch gewünschte Dashboard-Overlay weicht von YouTubes [Vorgaben zu Overlays](https://developers.google.com/youtube/terms/required-minimum-functionality#overlays-and-frames) ab. Lokale Videos benötigen keine Internetverbindung.
 
 ## Daten & Rücknahme

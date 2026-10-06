@@ -4,7 +4,7 @@ interface Quota { label: string; usedPercent: number; resetsAt: number | null }
 interface SessionUsage { id: string; label: string; usedPercent: number | null; tokens: number | null; capacity: number | null; updatedAt: string }
 interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null }
 interface Snapshot { time: string; metrics: Metric[]; drives: DriveUsage[]; ai: AiUsage[]; hardwareStatus: string }
-interface Settings { [key: string]: string | number | boolean; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string }
+interface Settings { [key: string]: string | number | boolean; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; textColor: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string }
 interface DisplayInfo { id: string; label: string }
 interface Bridge { postMessage(data: unknown): void; addEventListener(type: string, callback: (event: MessageEvent) => void): void }
 interface YoutubePlayer { mute(): void; unMute(): void; setVolume(volume: number): void; playVideo(): void; pauseVideo(): void; getPlayerState(): number; destroy(): void }
@@ -13,7 +13,7 @@ interface Window { chrome?: { webview?: Bridge }; YT?: YoutubeApi; onYouTubeIfra
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 const $$ = <T extends HTMLElement = HTMLElement>(selector: string): T[] => [...document.querySelectorAll<T>(selector)];
 const bridge = window.chrome?.webview;
-let settings: Settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
+let settings: Settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
 let latest: Snapshot | null = null;
 let player: YoutubePlayer | null = null;
 let youtubeReady = false;
@@ -99,11 +99,9 @@ function renderAi(provider: AiUsage): void {
 }
 
 function applyConfiguration(config: { settings: Settings; displays: DisplayInfo[]; mediaUrl?: string }): void {
-  settings = config.settings;
+  settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6' };
   localMediaUrl = config.mediaUrl ?? '';
-  document.documentElement.style.setProperty('--accent', settings.accent);
-  document.documentElement.style.setProperty('--card-alpha', String(settings.cardOpacity));
-  $('#shade').style.opacity = String(settings.dim);
+  applyAppearance();
   $('#mute').textContent = settings.muted ? '◌' : '♫'; $('#mute').title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
   $<HTMLInputElement>('#volume').value = String(settings.volume);
   const displays = $<HTMLSelectElement>('#display-select'); displays.replaceChildren(); config.displays.forEach(d => displays.add(new Option(d.label, d.id)));
@@ -113,10 +111,23 @@ function applyConfiguration(config: { settings: Settings; displays: DisplayInfo[
   }
   applyBackground(); applyAudio(); if (latest) latest.ai.forEach(renderAi);
 }
+function applyAppearance(): void {
+  document.documentElement.style.setProperty('--accent', settings.accent);
+  document.documentElement.style.setProperty('--text', settings.textColor);
+  document.documentElement.style.setProperty('--muted', `color-mix(in srgb, ${settings.textColor} 63%, #13202c)`);
+  document.documentElement.style.setProperty('--card-alpha', String(settings.cardOpacity));
+  $('#shade').style.opacity = String(settings.dim);
+}
 function save(): void { send('saveSettings', { settings }); if (!bridge) applyConfiguration({ settings, displays: [{ id: '', label: 'Vorschau' }] }); }
 window.openSettings = () => { if (!dialog.open) dialog.showModal(); };
 $('#settings-button').onclick = window.openSettings;
 $('#close-settings').onclick = () => dialog.close();
+for (const name of ['accent', 'textColor', 'cardOpacity', 'dim']) {
+  const control = form.elements.namedItem(name) as HTMLInputElement;
+  const update = () => { settings[name] = control.type === 'range' ? Number(control.value) : control.value; applyAppearance(); save(); text('#settings-status', 'Darstellung automatisch gespeichert.'); };
+  control.addEventListener('input', update);
+  control.addEventListener('change', update);
+}
 dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close(); } });
 form.onsubmit = event => {
   event.preventDefault(); const next = { ...settings };
@@ -152,7 +163,7 @@ function youtubeId(value: string): string | null {
   } catch { return null; }
 }
 function applyBackground(): void {
-  const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}`; if (signature === mediaSignature) return; mediaSignature = signature;
+  const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}|${localMediaUrl}`; if (signature === mediaSignature) return; mediaSignature = signature;
   player?.destroy(); player = null; youtubeReady = false; setPlaying(false); video.pause(); video.removeAttribute('src'); video.load(); video.style.display = 'none';
   let mount = $('#youtube'); if (!mount) { mount = element('div', ''); mount.id = 'youtube'; $('#background').prepend(mount); } mount.replaceChildren();
   if (settings.backgroundMode === 'local' && settings.localVideoPath && localMediaUrl) { video.src = localMediaUrl; video.style.display = 'block'; applyAudio(); void video.play().catch(() => showNotice('Klicke auf ▶, um das Video zu starten.')); text('#media-state', 'LOKALES VIDEO'); }

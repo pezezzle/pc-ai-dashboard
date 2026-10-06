@@ -2,7 +2,7 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const bridge = window.chrome?.webview;
-let settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
+let settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
 let latest = null;
 let player = null;
 let youtubeReady = false;
@@ -135,11 +135,9 @@ function renderAi(provider) {
         ctx.append(element('span', '', name === 'claude' ? 'Ab nächster Claude-Code-Sitzung' : 'Noch keine lokalen Sitzungsdaten'));
 }
 function applyConfiguration(config) {
-    settings = config.settings;
+    settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6' };
     localMediaUrl = config.mediaUrl ?? '';
-    document.documentElement.style.setProperty('--accent', settings.accent);
-    document.documentElement.style.setProperty('--card-alpha', String(settings.cardOpacity));
-    $('#shade').style.opacity = String(settings.dim);
+    applyAppearance();
     $('#mute').textContent = settings.muted ? '◌' : '♫';
     $('#mute').title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
     $('#volume').value = String(settings.volume);
@@ -160,12 +158,25 @@ function applyConfiguration(config) {
     if (latest)
         latest.ai.forEach(renderAi);
 }
+function applyAppearance() {
+    document.documentElement.style.setProperty('--accent', settings.accent);
+    document.documentElement.style.setProperty('--text', settings.textColor);
+    document.documentElement.style.setProperty('--muted', `color-mix(in srgb, ${settings.textColor} 63%, #13202c)`);
+    document.documentElement.style.setProperty('--card-alpha', String(settings.cardOpacity));
+    $('#shade').style.opacity = String(settings.dim);
+}
 function save() { send('saveSettings', { settings }); if (!bridge)
     applyConfiguration({ settings, displays: [{ id: '', label: 'Vorschau' }] }); }
 window.openSettings = () => { if (!dialog.open)
     dialog.showModal(); };
 $('#settings-button').onclick = window.openSettings;
 $('#close-settings').onclick = () => dialog.close();
+for (const name of ['accent', 'textColor', 'cardOpacity', 'dim']) {
+    const control = form.elements.namedItem(name);
+    const update = () => { settings[name] = control.type === 'range' ? Number(control.value) : control.value; applyAppearance(); save(); text('#settings-status', 'Darstellung automatisch gespeichert.'); };
+    control.addEventListener('input', update);
+    control.addEventListener('change', update);
+}
 dialog.addEventListener('click', event => { if (event.target === dialog) {
     const r = dialog.getBoundingClientRect();
     if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)
@@ -250,7 +261,7 @@ function youtubeId(value) {
     }
 }
 function applyBackground() {
-    const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}`;
+    const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}|${localMediaUrl}`;
     if (signature === mediaSignature)
         return;
     mediaSignature = signature;

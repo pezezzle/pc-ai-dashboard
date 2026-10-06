@@ -26,6 +26,7 @@ public sealed class DashboardSettings
     public double Dim { get; set; } = 0.5;
     public double CardOpacity { get; set; } = 0.76;
     public string Accent { get; set; } = "#66e7c8";
+    public string TextColor { get; set; } = "#ecf3f6";
     public string AquasuiteSharedMemory { get; set; } = "PC-AI-Dashboard";
     public string AquasuiteXmlPath { get; set; } = "";
     public int PumpChannel { get; set; } = 4;
@@ -44,6 +45,7 @@ public sealed class DashboardSettings
         s.Dim = Math.Clamp(double.IsFinite(s.Dim) ? s.Dim : .5, 0, .95);
         s.CardOpacity = Math.Clamp(double.IsFinite(s.CardOpacity) ? s.CardOpacity : .76, .1, 1);
         if (!System.Text.RegularExpressions.Regex.IsMatch(s.Accent ?? "", "^#[0-9a-fA-F]{6}$")) s.Accent = "#66e7c8";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(s.TextColor ?? "", "^#[0-9a-fA-F]{6}$")) s.TextColor = "#ecf3f6";
         if (s.BackgroundMode is not ("gradient" or "youtube" or "local")) s.BackgroundMode = "gradient";
         s.PumpChannel = Math.Clamp(s.PumpChannel,0,7); s.SideChannel = Math.Clamp(s.SideChannel,0,7);
         s.BottomChannel = Math.Clamp(s.BottomChannel,0,7); s.BackChannel = Math.Clamp(s.BackChannel,0,7); s.TopChannel = Math.Clamp(s.TopChannel,0,7);

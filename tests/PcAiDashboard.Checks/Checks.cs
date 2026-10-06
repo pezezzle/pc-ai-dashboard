@@ -29,16 +29,40 @@ static class Checks
         using var claude=JsonDocument.Parse("""{"five_hour":{"utilization":22.5,"resets_at":"2026-10-09T21:13:27Z"},"seven_day":null,"seven_day_sonnet":{"utilization":48,"resets_at":null}}""");
         var cq=AiService.ParseClaudeLimits(claude.RootElement);
         Assert(cq.Count==2 && cq[0].ResetsAt==1791580407 && cq[1].ResetsAt==null,"Claude scoped windows and optional resets are preserved");
-        var s=DashboardSettings.Validate(new() { PumpChannel=100,CaseTempChannel=-1,Volume=-8,Dim=2,Accent="bad",BackgroundMode="bad" });
+        var s=DashboardSettings.Validate(new() { PumpChannel=100,CaseTempChannel=-1,Volume=-8,Dim=2,Accent="bad",TextColor="bad",BackgroundMode="bad" });
         Assert(s.PumpChannel==7 && s.CaseTempChannel==0 && s.Volume==0 && s.Dim==.95 && s.Accent=="#66e7c8" && s.BackgroundMode=="gradient","Settings constrain hardware channels and visual values");
+        Assert(s.TextColor=="#ecf3f6", "Invalid text color falls back to readable default");
+        var saved=JsonSerializer.Serialize(new DashboardSettings { Accent="#ff00ff", TextColor="#eecc88" },AppFiles.Json);
+        var restored=JsonSerializer.Deserialize<DashboardSettings>(saved,AppFiles.Json)!;
+        Assert(restored.Accent=="#ff00ff" && restored.TextColor=="#eecc88", "Both colors survive settings serialization");
+        const long large=7_430_854_813;
+        Assert(LocalVideoServer.TryRange("bytes=6000000000-6000000031",large,out var start,out var end) && start==6_000_000_000 && end==6_000_000_031,"Media ranges preserve offsets beyond 4 GB");
+        Assert(LocalVideoServer.TryRange("bytes=-32",large,out start,out end) && start==large-32 && end==large-1,"Suffix media range can read the end of a large MP4");
+        Assert(!LocalVideoServer.TryRange("bytes=99999999999999999999-",large,out _,out _) && !LocalVideoServer.TryRange("bytes=5-2",large,out _,out _),"Overflow and backwards media ranges are rejected");
+        CheckMediaHttp(Assert).GetAwaiter().GetResult();
+        Console.WriteLine($"{count} checks passed."); return 0;
+    }
+    private static async Task CheckMediaHttp(Action<bool,string> Assert)
+    {
         var fixture=System.IO.Path.GetTempFileName();
         try {
             System.IO.File.WriteAllBytes(fixture,[0,1,2,3,4,5,6,7]);
-            using var segment=new MediaSegmentStream(fixture,2,3);var buffer=new byte[8];
-            Assert(segment.Read(buffer,0,8)==3 && buffer[0]==2 && buffer[2]==4 && segment.Read(buffer,0,8)==0,"Video byte-range stream never reads beyond its range");
-            segment.Seek(-1,System.IO.SeekOrigin.End);
-            Assert(segment.ReadByte()==4 && segment.Length==3,"Video byte-range seeking uses relative positions");
+            using var server=new LocalVideoServer("https://pc-ai-dashboard.local"); server.Configure(fixture);
+            using var http=new HttpClient { Timeout=TimeSpan.FromSeconds(5) };
+            using var request=new HttpRequestMessage(HttpMethod.Get,server.Url);
+            request.Headers.Range=new System.Net.Http.Headers.RangeHeaderValue(2,4);
+            using var response=await http.SendAsync(request);
+            var body=await response.Content.ReadAsByteArrayAsync();
+            Assert(response.StatusCode==System.Net.HttpStatusCode.PartialContent && body.SequenceEqual(new byte[] {2,3,4}) && response.Content.Headers.ContentRange?.To==4,"Loopback streams only requested bytes with a correct 206 response");
+            using var head=await http.SendAsync(new HttpRequestMessage(HttpMethod.Head,server.Url));
+            Assert(head.Content.Headers.ContentLength==8 && (await head.Content.ReadAsByteArrayAsync()).Length==0,"HEAD reports full video size without reading its body");
+            using var bad=new HttpRequestMessage(HttpMethod.Get,server.Url); bad.Headers.Range=new System.Net.Http.Headers.RangeHeaderValue(80,null);
+            using var outside=await http.SendAsync(bad);
+            Assert(outside.StatusCode==System.Net.HttpStatusCode.RequestedRangeNotSatisfiable && outside.Content.Headers.ContentRange?.Length==8,"Invalid media range returns 416 and the actual file size");
+            using var foreign=new HttpRequestMessage(HttpMethod.Get,server.Url); foreign.Headers.Add("Origin","https://example.com");
+            using var denied=await http.SendAsync(foreign);
+            using var unknown=await http.GetAsync(new Uri(new Uri(server.Url),"/unknown"));
+            Assert(denied.StatusCode==System.Net.HttpStatusCode.Forbidden && unknown.StatusCode==System.Net.HttpStatusCode.NotFound,"Foreign origins and unknown paths cannot read the selected video");
         }finally {System.IO.File.Delete(fixture);}
-        Console.WriteLine($"{count} checks passed."); return 0;
     }
 }

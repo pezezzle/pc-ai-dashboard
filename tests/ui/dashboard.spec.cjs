@@ -36,3 +36,19 @@ test('chat choice persists across live updates and strings render as text',async
   await page.evaluate(s=>window.dashboardTest.render(s),snapshot); await page.locator('#codex-card select').selectOption('second');
   await page.evaluate(s=>window.dashboardTest.render(s),snapshot); await expect(page.locator('#codex-card select')).toHaveValue('second'); await expect(page.locator('#codex-card .context-value strong')).toHaveText('70%'); await expect(page.locator('#codex-card img')).toHaveCount(0);
 });
+
+test('text and accent colors apply immediately and save without submitting the dialog',async ({page})=> {
+  await page.locator('#settings-button').click();
+  await page.locator('[name="textColor"]').fill('#eecc88');
+  await page.locator('[name="textColor"]').dispatchEvent('change');
+  await expect(page.locator('#clock')).toHaveCSS('color','rgb(238, 204, 136)');
+  await expect(page.locator('[data-metric="cpuTemp"]')).toHaveCSS('color','rgb(238, 204, 136)');
+  await expect(page.locator('#settings-status')).toContainText('automatisch gespeichert');
+  await page.locator('[name="accent"]').fill('#ff00ff');
+  await page.locator('[name="accent"]').dispatchEvent('change');
+  const saved=await page.evaluate(()=>window.dashboardTest.getSettings());
+  await page.reload();
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[]}),saved);
+  await expect(page.locator('#clock')).toHaveCSS('color','rgb(238, 204, 136)');
+  await expect(page.locator('.brand-mark')).toHaveCSS('color','rgb(255, 0, 255)');
+});

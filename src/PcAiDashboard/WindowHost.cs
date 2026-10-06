@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly Forms.NotifyIcon tray=new();
     private bool ready;
     private const string Origin="https://pc-ai-dashboard.local";
+    private readonly LocalVideoServer videoServer=new(Origin);
     public MainWindow()
     {
         InitializeComponent();
@@ -37,27 +38,6 @@ public partial class MainWindow : Window
             var core=Browser.CoreWebView2;
             core.Settings.IsStatusBarEnabled=false; core.Settings.AreDefaultContextMenusEnabled=false;
             core.SetVirtualHostNameToFolderMapping("pc-ai-dashboard.local",Path.Combine(AppContext.BaseDirectory,"Web"),CoreWebView2HostResourceAccessKind.DenyCors);
-            // A separate, non-mapped origin ensures media requests reach this handler.
-            core.AddWebResourceRequestedFilter("https://pc-ai-stream.local/*",CoreWebView2WebResourceContext.All);
-            core.WebResourceRequested+=(_,args)=>
-            {
-                if(args.Request.Uri!="https://pc-ai-stream.local/current") return;
-                try
-                {
-                    if(!File.Exists(settings.LocalVideoPath)) { args.Response=core.Environment.CreateWebResourceResponse(Stream.Null,404,"Not Found",""); return; }
-                    long length=new FileInfo(settings.LocalVideoPath).Length,start=0,end=length-1;
-                    var range=args.Request.Headers.Contains("Range")?args.Request.Headers.GetHeader("Range"):"";
-                    var match=System.Text.RegularExpressions.Regex.Match(range,"^bytes=(\\d+)-(\\d*)$"); bool partial=match.Success;
-                    if(partial) { start=long.Parse(match.Groups[1].Value); if(match.Groups[2].Value.Length>0) end=Math.Min(end,long.Parse(match.Groups[2].Value)); }
-                    if(start>end || start>=length) { args.Response=core.Environment.CreateWebResourceResponse(Stream.Null,416,"Range Not Satisfiable",$"Content-Range: bytes */{length}"); return; }
-                    var media=new MediaSegmentStream(settings.LocalVideoPath,start,end-start+1);
-                    string mime=Path.GetExtension(settings.LocalVideoPath).Equals(".webm",StringComparison.OrdinalIgnoreCase)?"video/webm":"video/mp4";
-                    string headers=$"Content-Type: {mime}\r\nContent-Length: {end-start+1}\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: {Origin}";
-                    if(partial) headers+=$"\r\nContent-Range: bytes {start}-{end}/{length}";
-                    args.Response=core.Environment.CreateWebResourceResponse(media,partial?206:200,partial?"Partial Content":"OK",headers);
-                }
-                catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or OverflowException) { args.Response=core.Environment.CreateWebResourceResponse(Stream.Null,404,"Not Found",""); }
-            };
             core.NavigationStarting+=(_,args)=> { if(!args.Uri.StartsWith(Origin+"/",StringComparison.OrdinalIgnoreCase)) args.Cancel=true; };
             core.NewWindowRequested+=(_,args)=> { args.Handled=true; };
             core.PermissionRequested+=(_,args)=> { args.State=CoreWebView2PermissionState.Deny; };
@@ -83,11 +63,8 @@ public partial class MainWindow : Window
     private void Send(object value)=>Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value,AppFiles.Json));
     private void SendConfiguration()
     {
-        string mediaUrl="";
-        if(!string.IsNullOrWhiteSpace(settings.LocalVideoPath) && File.Exists(settings.LocalVideoPath))
-        {
-            mediaUrl="https://pc-ai-stream.local/current";
-        }
+        videoServer.Configure(settings.LocalVideoPath);
+        string mediaUrl=File.Exists(settings.LocalVideoPath)?videoServer.Url:"";
         Send(new {type="configuration",settings,mediaUrl,displays=GetDisplays(),integration=File.Exists(Path.Combine(AppFiles.Root,"claude-statusline.cjs"))});
     }
     private async void OnMessage(object? sender,CoreWebView2WebMessageReceivedEventArgs e)
@@ -100,8 +77,12 @@ public partial class MainWindow : Window
             {
                 case "ready": ready=true; SendConfiguration(); break;
                 case "saveSettings":
+                    var previous=settings;
                     settings=DashboardSettings.Validate(r.GetProperty("settings").Deserialize<DashboardSettings>(AppFiles.Json)??settings);
-                    AppFiles.SaveSettings(settings); ApplyAutostart(); ApplyDisplay(); SendConfiguration(); break;
+                    AppFiles.SaveSettings(settings);
+                    if(previous.Autostart!=settings.Autostart) ApplyAutostart();
+                    if(previous.DisplayId!=settings.DisplayId || previous.Fullscreen!=settings.Fullscreen || previous.AlwaysOnTop!=settings.AlwaysOnTop) ApplyDisplay();
+                    SendConfiguration(); break;
                 case "pickVideo":
                     var picker=new OpenFileDialog { Title="Hintergrundvideo auswählen",Filter="Videos (*.mp4;*.webm;*.m4v)|*.mp4;*.webm;*.m4v" };
                     if(picker.ShowDialog(this)==true) { settings.LocalVideoPath=picker.FileName; settings.BackgroundMode="local"; AppFiles.SaveSettings(settings); SendConfiguration(); } break;
@@ -159,6 +140,6 @@ public partial class MainWindow : Window
         }
         catch(Exception e) { AppFiles.Log("Claude-Kontextanbindung: "+e.GetType().Name); }
     }
-    private void OnClosed(object? sender,EventArgs e) { stop.Cancel(); hardware.Dispose(); ai.Dispose(); tray.Dispose(); Browser.Dispose(); }
+    private void OnClosed(object? sender,EventArgs e) { stop.Cancel(); videoServer.Dispose(); hardware.Dispose(); ai.Dispose(); tray.Dispose(); Browser.Dispose(); }
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
 }
