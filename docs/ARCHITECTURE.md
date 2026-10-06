@@ -12,7 +12,7 @@ The application is a Windows desktop host with a local web interface. It does no
 | `LocalVideoServer.cs` | Selected-file loopback streaming and HTTP byte ranges |
 | `Models.cs` | Records, validated settings, local file paths, limited logging |
 | `ui/main.ts` | Rendering, charts, provider cards, media controls, settings |
-| `Web/index.html`, `Web/styles.css` | Proportional layout and appearance |
+| `Web/index.html`, `Web/styles.css`, `Web/dashboard.css` | Proportional layout, appearance, and compact sensor/larger account layout |
 | `Web/integrations/claude-statusline.cjs` | Claude Code usage metadata collector |
 
 ## Interface and host bridge
@@ -20,6 +20,8 @@ The application is a Windows desktop host with a local web interface. It does no
 WebView2 serves the bundled interface from `https://pc-ai-dashboard.local` through a virtual-host folder mapping. TypeScript sends structured messages for settings, file selection, screenshots, and window actions. The host checks the message origin before processing it.
 
 The host pushes snapshots once per second. Provider account queries run every sixty seconds. The interface independently updates reset countdowns and displays last-measured timestamps.
+
+`CreditUsage` keeps a funded balance separate from optional monthly spending and limits. Codex numerical strings are parsed with invariant culture. Claude money fields use their declared currency and exponent; absent balances remain null. OCTO fan metrics include independent RPM and PWM readings for each assigned channel. The interface uses PWM percentages for rings and degree-based scales for temperature bars.
 
 `ui/main.ts` is the maintained source. `npm run build` generates the committed `Web/main.js`. CI fails if rebuilding changes the generated file.
 
@@ -41,6 +43,6 @@ Credentials remain in provider-managed locations. The dashboard neither embeds t
 
 ## Failure handling
 
-Missing readings stay unavailable. Outdated Aquasuite exports are rejected. Provider connection errors preserve the last known quota with an explicit stale indication. Video errors produce an interface notice without replacing sensor readings.
+Missing readings stay unavailable. Outdated Aquasuite exports are rejected. Provider connection errors preserve the last known quota and credit values with an explicit stale indication. Claude HTTP 429 responses schedule a retry delay instead of continuing once-per-minute requests. Video errors produce an interface notice without replacing sensor readings.
 
 Normal startup does not expose a CDP debugging port. Test tools require a deliberately started debug instance on loopback.

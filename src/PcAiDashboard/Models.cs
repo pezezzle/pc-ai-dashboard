@@ -7,7 +7,9 @@ public record Metric(string Id, string Label, double? Value, string Unit, string
 public record DriveUsage(string Name, string Label, double UsedGb, double TotalGb, double UsedPercent);
 public record Quota(string Label, double UsedPercent, long? ResetsAt, int? WindowMinutes = null);
 public record SessionUsage(string Id, string Label, double? UsedPercent, long? Tokens, long? Capacity, DateTimeOffset UpdatedAt);
-public record AiUsage(string Name, string Status, List<Quota> Quotas, List<SessionUsage> Sessions, DateTimeOffset? UpdatedAt = null, string? Detail = null);
+public record CreditUsage(string Status, double? Balance = null, string Unit = "Credits", bool Unlimited = false,
+    double? Spent = null, double? Limit = null, bool Enabled = true, string? Detail = null);
+public record AiUsage(string Name, string Status, List<Quota> Quotas, List<SessionUsage> Sessions, DateTimeOffset? UpdatedAt = null, string? Detail = null, CreditUsage? Credits = null);
 public record DisplayInfo(string Id, string Label, int Width, int Height, int X, int Y, bool Primary);
 public record DashboardSnapshot(DateTimeOffset Time, List<Metric> Metrics, List<DriveUsage> Drives, List<AiUsage> Ai, string HardwareStatus);
 
@@ -27,6 +29,7 @@ public sealed class DashboardSettings
     public double CardOpacity { get; set; } = 0.76;
     public string Accent { get; set; } = "#66e7c8";
     public string TextColor { get; set; } = "#ecf3f6";
+    public int TemperatureScaleMax { get; set; } = 100;
     public string AquasuiteSharedMemory { get; set; } = "PC-AI-Dashboard";
     public string AquasuiteXmlPath { get; set; } = "";
     public int PumpChannel { get; set; } = 4;
@@ -44,6 +47,7 @@ public sealed class DashboardSettings
         s.Volume = Math.Clamp(s.Volume, 0, 100);
         s.Dim = Math.Clamp(double.IsFinite(s.Dim) ? s.Dim : .5, 0, .95);
         s.CardOpacity = Math.Clamp(double.IsFinite(s.CardOpacity) ? s.CardOpacity : .76, .1, 1);
+        s.TemperatureScaleMax = Math.Clamp(s.TemperatureScaleMax,40,120);
         if (!System.Text.RegularExpressions.Regex.IsMatch(s.Accent ?? "", "^#[0-9a-fA-F]{6}$")) s.Accent = "#66e7c8";
         if (!System.Text.RegularExpressions.Regex.IsMatch(s.TextColor ?? "", "^#[0-9a-fA-F]{6}$")) s.TextColor = "#ecf3f6";
         if (s.BackgroundMode is not ("gradient" or "youtube" or "local")) s.BackgroundMode = "gradient";

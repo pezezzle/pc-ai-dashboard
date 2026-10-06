@@ -1,6 +1,6 @@
 # Build and test status
 
-Last verified: **2026-10-06**. Application version: **1.0.1**.
+Last verified: **2026-10-06**. Application version: **1.0.2**.
 
 ## Build workflow
 
@@ -32,10 +32,11 @@ GitHub Actions runs the build, checks generated JavaScript consistency, runs the
 | Check | Result |
 |---|---|
 | Release build | Passed with zero warnings and errors |
-| Data and media protocol checks | 20 passed |
-| Edge interface tests | 5 passed |
+| Data and media protocol checks | 29 passed, including credit units, missing balances, and PWM decoding |
+| Edge interface tests | 7 passed, including two quota windows, credits, unclipped larger text, PWM rings, and storage decimals |
 | Live hardware | CPU, GPU, RAM, fixed-drive storage, OCTO temperatures, pump and four fan groups verified |
 | AI usage | Codex and Claude windows verified with valid provider sessions |
+| Credits and layout | Live Codex balance, Claude monthly spending with unavailable funded balance, all five PWM channels, two-decimal storage, and unclipped bottom cards verified |
 | YouTube | Playback, mute/unmute, pause/resume, and unavailable-video errors verified |
 | Large MP4 | 7.4 GB, 7:33:59, H.264/AAC, 1280 × 720; playback and seek to 3:04:27 verified |
 | Media ranges | Live read beyond 4 GB; suffix ranges, `HEAD`, `206`, and `416` verified |
@@ -59,6 +60,8 @@ node tools/test-local-video.cjs 'C:\path\to\large-video.mp4'
 Without an argument, the media tool creates a short WebM. It temporarily changes background/audio preferences and restores the original settings afterward. `test-appearance.cjs save` writes test colors and exits; restart the test instance, then run `test-appearance.cjs verify-restore` to verify persistence, restore the original colors, and exit.
 
 `test-webview.cjs` verifies live readings and YouTube. It expects valid Claude/Codex sessions and a gradient background in its test setup. These are local integration checks, not CI tests.
+
+`node tools/test-credits-layout.cjs` verifies credit availability, actual PWM rings, storage formatting, degree scales, card fit, and uninterrupted local video during a subsequent account poll. It expects signed-in providers, an OCTO, and an already playing local background. It does not change settings or persist credentials.
 
 Close the test app and remove the debug environment variable before normal use:
 

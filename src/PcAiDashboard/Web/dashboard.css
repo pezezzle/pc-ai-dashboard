@@ -1,0 +1,58 @@
+/* Rebalance the small display around the account and storage cards. */
+#stage { gap: 6px; }
+main { gap: 8px; }
+.compute { height: 110px; }
+.compute-card, .memory-card { padding: 10px 15px; }
+.compute-values { margin-top: 5px; }
+.compute-values strong { font-size: 38px; }
+.compute-bottom { margin: 3px 0; }
+.cooling { height: 54px; }
+.temp-card { padding: 7px 14px; }
+.temp-card .eyebrow { font-size: 10px; }
+.temp-value { margin-top: 1px; gap: 5px; }
+.temp-value strong, .delta-card strong { font-size: 24px; }
+.temp-value span { font-size: 12px; }
+.delta-card { padding: 7px 14px; }
+.temperature-gauge { display: flex; gap: 5px; align-items: stretch; height: 34px; }
+.temperature-gauge .thermo { height: 34px; width: 4px; }
+.temperature-gauge .thermo i { width: 4px; }
+.temperature-scale { display: flex; flex-direction: column; justify-content: space-between; color: var(--muted); font-size: 8px; line-height: 9px; }
+.fans { height: 74px; }
+.fan-card { padding: 9px 10px; gap: 7px; }
+.fan-icon { font-size: 25px; }
+.fan-card strong { font-size: 21px; }
+.fan-card .unit { font-size: 9px; margin-left: 3px; }
+.fan-meter { position: relative; width: 40px; height: 40px; margin-left: auto; flex: 0 0 40px; }
+.fan-meter svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.fan-meter circle { fill: none; stroke: #ffffff20; stroke-width: 3; }
+.fan-meter circle.fan-meter-fill { stroke: var(--accent); stroke-dasharray: 0 100; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+.fan-meter > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.fan-meter strong { font-size: 12px; letter-spacing: 0; font-weight: 650; }
+.fan-meter small { font-size: 6px; color: var(--muted); }
+.ai-card, .disks-card { padding: 10px 13px; }
+.provider-name { font-size: 13px; }
+.provider-state { font-size: 10px; }
+.quotas { height: 112px; padding-top: 6px; }
+.quota { margin-bottom: 6px; }
+.quota-title { font-size: 13px; line-height: 23px; }
+.quota-title strong { font-size: 19px; }
+.quota-detail { font-size: 11px; line-height: 14px; margin: 2px 0 3px; letter-spacing: -.1px; }
+.credits { height: 36px; padding-top: 4px; }
+.credit-line { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
+.credit-line > span { color: var(--muted); font-size: 10px; letter-spacing: .6px; }
+.credit-line strong { font-size: 15px; font-weight: 600; }
+.credit-detail { color: var(--muted); font-size: 10px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.context { padding-top: 6px; margin-top: 3px; }
+.context-label { font-size: 11px; letter-spacing: .5px; }
+.context-label select { font-size: 10px; max-width: 175px; }
+.context-value { font-size: 11px; margin-top: 3px; }
+.context-value strong { font-size: 22px; }
+.context-age { font-size: 10px; }
+.ai-card .empty { font-size: 12px; }
+.disks-card > .eyebrow { font-size: 13px; }
+.disks-card > .eyebrow .muted { font-size: 10px; }
+#drives { max-height: 185px; margin-top: 14px; }
+.drive { margin-bottom: 19px; }
+.drive-title { font-size: 14px; align-items: baseline; }
+.drive-title strong { font-size: 23px; }
+.drive-info { font-size: 12px; margin: 5px 0 8px; }

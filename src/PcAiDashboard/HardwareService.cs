@@ -67,7 +67,10 @@ public sealed class HardwareService : IDisposable
         lock(gate) { report=octo?.ToArray(); at=octoTime; status=octoStatus; }
         bool fresh=report!=null && (now-at).TotalSeconds<6;
         void Temp(string id,string label,int channel) => metrics.Add(new(id,label,fresh?OctoTemperature(report!,channel):null,"°C","OCTO",fresh?at:null));
-        void Fan(string id,string label,int channel) => metrics.Add(new(id,label,fresh?OctoRpm(report!,channel):null,"RPM","OCTO",fresh?at:null));
+        void Fan(string id,string label,int channel) {
+            metrics.Add(new(id,label,fresh?OctoRpm(report!,channel):null,"RPM","OCTO",fresh?at:null));
+            metrics.Add(new(id.Replace("Rpm","Duty"),label+" PWM",fresh?OctoDuty(report!,channel):null,"%","OCTO",fresh?at:null));
+        }
         Temp("coolantPump","Pump Coolant",settings.PumpTempChannel); Temp("coolantRadiator","Radiator Coolant",settings.RadiatorTempChannel); Temp("caseTemp","Case",settings.CaseTempChannel);
         Fan("pumpRpm","Pumpe",settings.PumpChannel); Fan("topRpm","Top",settings.TopChannel); Fan("sideRpm","Side",settings.SideChannel); Fan("bottomRpm","Bottom",settings.BottomChannel); Fan("backRpm","Back",settings.BackChannel);
         var export=ReadExport(settings);
@@ -97,6 +100,11 @@ public sealed class HardwareService : IDisposable
     public static double? OctoRpm(byte[] report,int channel)
     {
         int index=0x85+13*channel; if(channel is <0 or >7 || report.Length<index+2) return null; return report[index]*256+report[index+1];
+    }
+    public static double? OctoDuty(byte[] report,int channel)
+    {
+        int index=0x7d+13*channel; if(channel is <0 or >7 || report.Length<index+2) return null;
+        int raw=report[index]*256+report[index+1]; return raw<=10000?raw/100.0:null;
     }
     public static List<Metric> ParseExport(string xml, DateTimeOffset now)
     {

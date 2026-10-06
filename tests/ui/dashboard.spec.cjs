@@ -52,3 +52,27 @@ test('text and accent colors apply immediately and save without submitting the d
   await expect(page.locator('#clock')).toHaveCSS('color','rgb(238, 204, 136)');
   await expect(page.locator('.brand-mark')).toHaveCSS('color','rgb(255, 0, 255)');
 });
+
+test('credits, PWM rings and readable lower cards fit with two quota windows',async ({page})=> {
+  await page.evaluate(()=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[{id:'coolantPump',value:40,unit:'°C'},{id:'topDuty',value:45.96,unit:'%'},{id:'topRpm',value:950,unit:'RPM'}],drives:[{name:'C:\\',label:'System',usedGb:723.4,totalGb:1000,usedPercent:72.34}],ai:[{name:'Codex',status:'Live',updatedAt:new Date().toISOString(),quotas:[{label:'7 Tage',usedPercent:100,resetsAt:Date.now()/1000+90000}],sessions:[{id:'1',label:'Test',tokens:57027,capacity:380000,usedPercent:15,updatedAt:new Date().toISOString()}],credits:{status:'Live',balance:44651.02745925,unit:'Credits',unlimited:false,spent:null,limit:null,enabled:true,detail:null}},{name:'Claude',status:'Live',updatedAt:new Date().toISOString(),quotas:[{label:'5 Stunden',usedPercent:10,resetsAt:Date.now()/1000+3000},{label:'7 Tage',usedPercent:30,resetsAt:Date.now()/1000+90000}],sessions:[],credits:{status:'Live',balance:100,unit:'USD',unlimited:false,spent:12.67,limit:40,enabled:true,detail:null}}],hardwareStatus:'Test'}));
+  await expect(page.locator('.drive-title strong')).toHaveText('72,34 %');
+  await expect(page.locator('#codex-card .credit-line strong')).toHaveText('44.651,03 Credits');
+  await expect(page.locator('#claude-card .credit-line strong')).toHaveText('100,00 USD');
+  await expect(page.locator('#claude-card .credit-detail')).toContainText('12,67 / 40,00 USD');
+  expect(await page.locator('[data-temp="coolantPump"]').evaluate(e=>e.style.height)).toBe('40%');
+  expect(await page.locator('[data-duty="topDuty"] .fan-meter-fill').evaluate(e=>e.style.strokeDasharray)).toBe('45.96, 100');
+  await expect(page.locator('[data-metric="topDuty"]')).toHaveText('46');
+  const clipped=await page.evaluate(()=>[...document.querySelectorAll('.ai-card,.disks-card,.fan-card')].filter(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth).map(e=>e.id||e.className));
+  expect(clipped).toEqual([]);
+  await page.screenshot({path:'artifacts/dashboard-credits-preview.png'});
+});
+
+test('missing balance remains explicit and degree scale changes preserve measurements',async ({page})=> {
+  await page.evaluate(()=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[{id:'coolantPump',value:40,unit:'°C'}],drives:[],ai:[{name:'Claude',status:'Live',updatedAt:new Date().toISOString(),quotas:[],sessions:[],credits:{status:'Live',balance:null,unit:'USD',unlimited:false,spent:0,limit:135,enabled:false,detail:'Restguthaben nicht vom Anbieter bereitgestellt'}}],hardwareStatus:'Test'}));
+  await expect(page.locator('#claude-card .credit-line strong')).toHaveText('Nicht abrufbar');
+  await expect(page.locator('#claude-card .credit-detail')).toContainText('0,00 / 135,00 USD');
+  await page.locator('#settings-button').click();await page.locator('[name="temperatureScaleMax"]').fill('80');await page.getByRole('button',{name:'Speichern',exact:true}).click();
+  expect(await page.locator('[data-temp="coolantPump"]').evaluate(e=>e.style.height)).toBe('50%');
+  await expect(page.locator('[data-temp-max]').first()).toHaveText('80 °C');
+  await expect(page.locator('[data-metric="coolantPump"]')).toHaveText('40,0');
+});

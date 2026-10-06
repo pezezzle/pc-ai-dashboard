@@ -36,3 +36,7 @@ Open **Einstellungen → Anzeige**:
 These four values save immediately when changed and survive a full restart. Pressing **Speichern** is not required for them. Other form settings use **Speichern**, except controls with their own immediate action, such as video selection and toolbar audio.
 
 High-temperature and high-usage warning colors remain distinct. Appearance does not change quota meaning: the large percentage is used allowance, and remaining allowance is `100 − used`.
+
+The temperature row is deliberately compact so account and storage text can be larger. Temperature bars have labeled endpoints in °C, defaulting to 0–100 °C. **Temperatur-Skala bis (°C)** under **Anzeige** accepts 40–120 °C and saves with **Speichern**. This only rescales the display; actual measurements and controller settings are unchanged.
+
+Pump and fan rings show actual OCTO PWM from 0–100%, while the rotating icons and RPM remain visible. Storage percentages always display two decimal places with a decimal comma. The account credit row uses the provider's credit unit or currency and keeps monthly spending separate from funded balance.

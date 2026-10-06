@@ -48,6 +48,8 @@ Settings show channel numbers starting at one. The internal adapter uses zero-ba
 
 These defaults match the original machine's Aquasuite assignment. Adjust them for another PC. A splitter reports the tachometer signal connected to its channel, not the average RPM of every attached fan.
 
+Each pump/fan ring uses its assigned channel's actual PWM output, decoded in hundredths of a percent. It is not calculated from RPM and is not electrical power consumption. Temperature bars use a separate degree scale, defaulting to 0–100 °C; change **Temperatur-Skala bis (°C)** under **Anzeige** and save. This is a display scale, not a cooling-controller limit or warning threshold.
+
 The adapter reads OCTO HID input reports only. It never sends configuration or speed-control commands. Its layout was checked against the [public liquidctl protocol implementation](https://github.com/liquidctl/liquidctl/blob/main/liquidctl/driver/aquacomputer.py) and live reports. This project contains its own decoding logic.
 
 ## Other hardware readings
@@ -55,7 +57,7 @@ The adapter reads OCTO HID input reports only. It never sends configuration or s
 - CPU total usage comes from Windows system times.
 - NVIDIA core temperature and utilization are collected through `nvidia-smi` every two seconds.
 - RAM shows physical memory currently used and the total installed memory.
-- Storage shows used/free space for mounted fixed volumes. Disconnected drives and unmounted volumes are not included.
+- Storage shows used/free space for mounted fixed volumes, with used percentages formatted to two decimal places using a German decimal comma. Disconnected drives and unmounted volumes are not included.
 - Hardware snapshots reach the interface once per second. A source may update less frequently.
 
 ## AI integrations
@@ -66,6 +68,8 @@ The app locates the native CLI in the standard npm installation or on `PATH`. It
 
 Usage windows and reset times come from the provider response. Missing windows are omitted rather than displayed as zero usage. The app does not reset or increase an account allowance.
 
+The same response supplies `credits.balance`, `hasCredits`, and `unlimited` when available. The balance is displayed as credit points, not currency, with two decimal places. Missing numerical balances remain explicitly unavailable. Account usage and credits refresh every sixty seconds.
+
 Context comes from recent `token_count` measurements in the tails of local `.codex/sessions` files. The app retains usage metadata, not conversation text. The timestamp identifies the last measured input; an idle chat does not receive continuous context measurements.
 
 Reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server).
@@ -75,6 +79,8 @@ Reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server).
 A valid Claude Code OAuth session is preferred. Otherwise, the app checks the dedicated Claude Desktop OAuth cache for the current Windows user. It does not read browser cookies. Desktop cache decryption uses Windows DPAPI and AES-GCM locally. Decrypted tokens remain in memory for the authenticated usage request; they are not saved in dashboard settings or logs.
 
 The OAuth usage endpoint is not a guaranteed public API. It can change or reject an expired session. Cached limits are marked stale, and missing account access remains explicit. Sign in through the provider application if access has expired.
+
+Credit parsing prefers `spend.balance`, while `spend.used` and `spend.limit` describe monthly spending. Money fields are converted using their currency and decimal exponent. Legacy `extra_usage` fields provide a monthly spend/cap fallback only. The app never subtracts spending from the cap to invent a prepaid balance. Some OAuth responses omit the funded balance; the card then displays **Nicht abrufbar** even when monthly spending is known. On HTTP 429, polling respects `Retry-After`, or pauses for three minutes when no delay is provided.
 
 Claude Code context comes from a Node.js status-line integration. On first startup, the dashboard adds it only when no existing `statusLine` is configured. Existing status lines are preserved, and an existing settings file is backed up before modification. The integration writes session identifiers, display labels, context measurements, and limits into the dashboard's local data folder.
 

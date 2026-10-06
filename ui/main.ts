@@ -2,7 +2,8 @@ interface Metric { id: string; label: string; value: number | null; unit: string
 interface DriveUsage { name: string; label: string; usedGb: number; totalGb: number; usedPercent: number }
 interface Quota { label: string; usedPercent: number; resetsAt: number | null }
 interface SessionUsage { id: string; label: string; usedPercent: number | null; tokens: number | null; capacity: number | null; updatedAt: string }
-interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null }
+interface CreditUsage { status: string; balance: number | null; unit: string; unlimited: boolean; spent: number | null; limit: number | null; enabled: boolean; detail: string | null }
+interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null; credits?: CreditUsage | null }
 interface Snapshot { time: string; metrics: Metric[]; drives: DriveUsage[]; ai: AiUsage[]; hardwareStatus: string }
 interface Settings { [key: string]: string | number | boolean; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; textColor: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string }
 interface DisplayInfo { id: string; label: string }
@@ -49,7 +50,8 @@ function render(data: Snapshot): void {
   const map = new Map(data.metrics.map(m => [m.id, m]));
   $$('[data-metric]').forEach(el => { const metric = map.get(el.dataset.metric!); const value = metric?.value; el.textContent = fmt(value, metric?.unit === '°C' || el.dataset.metric === 'ramUsed' ? 1 : 0); el.classList.toggle('unavailable', value == null); el.classList.toggle('hot', metric?.unit === '°C' && (value ?? 0) > (metric.id.startsWith('coolant') ? 50 : 85)); el.title = metric ? `${metric.label} · ${metric.source} · ${age(metric.updatedAt)}` : 'Kein Messwert'; });
   $$('[data-bar]').forEach(el => { el.style.width = `${Math.min(100, Math.max(0, map.get(el.dataset.bar!)?.value ?? 0))}%`; });
-  $$('[data-temp]').forEach(el => { el.style.height = `${Math.min(100, Math.max(0, (map.get(el.dataset.temp!)?.value ?? 0) / 60 * 100))}%`; });
+  updateTemperatureBars(map);
+  $$('.fan-meter').forEach(el => { const value = map.get(el.dataset.duty!)?.value; const fill = el.querySelector<SVGCircleElement>('.fan-meter-fill')!; fill.style.strokeDasharray = `${Math.min(100, Math.max(0, value ?? 0))} 100`; el.classList.toggle('unavailable', value == null); el.title = value == null ? 'PWM-Wert nicht verfügbar' : `PWM-Ansteuerung: ${fmt(value, 2)} % · Skala 0–100 %`; });
   const pump = map.get('coolantPump')?.value, radiator = map.get('coolantRadiator')?.value;
   text('#delta-temp', pump != null && radiator != null ? fmt(pump - radiator, 1) : '—');
   text('#ram-total', fmt(map.get('ramTotal')?.value, 0) + ' GB TOTAL');
@@ -65,12 +67,15 @@ function render(data: Snapshot): void {
   data.ai.forEach(renderAi);
   const drives = $('#drives'); drives.replaceChildren();
   for (const d of data.drives) {
-    const row = element('div', 'drive'), heading = element('div', 'drive-title'); heading.append(element('span', '', d.name.replace(/\\$/, '') + (d.label ? ' · ' + d.label : '')), element('strong', '', fmt(d.usedPercent) + '%'));
+    const row = element('div', 'drive'), heading = element('div', 'drive-title'); heading.append(element('span', '', d.name.replace(/\\$/, '') + (d.label ? ' · ' + d.label : '')), element('strong', '', fmt(d.usedPercent, 2) + ' %'));
     const info = element('div', 'drive-info'); info.append(element('span', '', `${fmt(d.usedGb)} / ${fmt(d.totalGb)} GB`), element('span', '', `${fmt(d.totalGb - d.usedGb)} GB frei`)); row.append(heading, info, bar(d.usedPercent)); drives.append(row);
   }
   if (!data.drives.length) drives.append(element('div', 'empty', 'Keine Laufwerksdaten'));
   text('#hardware-state', data.hardwareStatus);
   text('#live-state span', data.metrics.some(m => m.value != null) ? 'SYSTEM LIVE' : 'VERBINDEN');
+}
+function updateTemperatureBars(map: Map<string, Metric>): void {
+  $$('[data-temp]').forEach(el => { const value = map.get(el.dataset.temp!)?.value; el.style.height = `${Math.min(100, Math.max(0, (value ?? 0) / Number(settings.temperatureScaleMax ?? 100) * 100))}%`; el.closest('.temperature-gauge')?.classList.toggle('unavailable', value == null); });
 }
 function renderAi(provider: AiUsage): void {
   const name = provider.name.toLowerCase(); const card = $(`#${name}-card`); if (!card) return;
@@ -85,6 +90,7 @@ function renderAi(provider: AiUsage): void {
   }
   if (!provider.quotas.length) container.append(element('div', 'empty', provider.detail ?? 'Noch keine Account-Limits verfügbar'));
   container.scrollTop = scroll;
+  renderCredits(card, provider);
   const select = card.querySelector<HTMLSelectElement>('.session-select')!;
   const key = name + 'SessionId'; const signature = JSON.stringify(provider.sessions.map(s => [s.id, s.label]));
   if (select.dataset.signature !== signature) { select.replaceChildren(); const auto = new Option('Letzter aktiver Chat', ''); select.add(auto); provider.sessions.forEach(s => select.add(new Option(s.label, s.id))); select.dataset.signature = signature; }
@@ -98,8 +104,22 @@ function renderAi(provider: AiUsage): void {
   } else ctx.append(element('span', '', name === 'claude' ? 'Ab nächster Claude-Code-Sitzung' : 'Noch keine lokalen Sitzungsdaten'));
 }
 
+function renderCredits(card: HTMLElement, provider: AiUsage): void {
+  const container = card.querySelector<HTMLElement>('.credits')!; container.replaceChildren();
+  const credit = provider.credits; const line = element('div', 'credit-line');
+  line.append(element('span', '', 'GUTHABEN'));
+  const value = credit?.unlimited ? 'Unbegrenzt' : credit?.balance != null ? `${fmt(credit.balance, 2)} ${credit.unit}` : 'Nicht abrufbar';
+  line.append(element('strong', '', value)); container.append(line);
+  let detail = credit?.detail ?? (credit?.balance != null || credit?.unlimited ? 'Aktueller Credit-Stand' : 'Anbieter liefert derzeit keinen Betrag');
+  if (credit?.spent != null) detail = `Monat: ${fmt(credit.spent, 2)}${credit.limit != null ? ' / ' + fmt(credit.limit, 2) : ''} ${credit.unit}${credit.enabled ? '' : ' · Zusatznutzung aus'}`;
+  const stale = provider.status !== 'Live' || (provider.updatedAt != null && Date.now() - new Date(provider.updatedAt).getTime() > 120000);
+  if (stale && credit) detail = 'Letzter Stand · ' + age(provider.updatedAt);
+  container.append(element('div', 'credit-detail', detail)); container.classList.toggle('unavailable', !credit);
+  container.title = `${credit?.detail ?? detail} · Aktualisierung alle 60 Sekunden · ${age(provider.updatedAt)}`;
+}
+
 function applyConfiguration(config: { settings: Settings; displays: DisplayInfo[]; mediaUrl?: string }): void {
-  settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6' };
+  settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100 };
   localMediaUrl = config.mediaUrl ?? '';
   applyAppearance();
   $('#mute').textContent = settings.muted ? '◌' : '♫'; $('#mute').title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
@@ -117,6 +137,8 @@ function applyAppearance(): void {
   document.documentElement.style.setProperty('--muted', `color-mix(in srgb, ${settings.textColor} 63%, #13202c)`);
   document.documentElement.style.setProperty('--card-alpha', String(settings.cardOpacity));
   $('#shade').style.opacity = String(settings.dim);
+  $$('[data-temp-max]').forEach(el => { el.textContent = `${settings.temperatureScaleMax} °C`; });
+  if (latest) updateTemperatureBars(new Map(latest.metrics.map(m => [m.id, m])));
 }
 function save(): void { send('saveSettings', { settings }); if (!bridge) applyConfiguration({ settings, displays: [{ id: '', label: 'Vorschau' }] }); }
 window.openSettings = () => { if (!dialog.open) dialog.showModal(); };

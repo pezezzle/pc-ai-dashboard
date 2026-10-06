@@ -3,6 +3,8 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Globalization;
+using System.Net;
 
 namespace PcAiDashboard;
 
@@ -13,6 +15,7 @@ public sealed class AiService : IDisposable
     private readonly object gate=new();
     private AiUsage codex=new("Codex","Verbinden",[],[]),claude=new("Claude","Verbinden",[],[]);
     private static readonly string Home=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    private DateTimeOffset claudeRetryAt;
     public AiService()=>_=Task.Run(Poll);
     public List<AiUsage> Read() { lock(gate) return [codex,claude]; }
     private async Task Poll()
@@ -44,7 +47,7 @@ public sealed class AiService : IDisposable
                 var response=await ReadResponse(process,2,timeout.Token);
                 if(response.TryGetProperty("error",out _)) throw new InvalidOperationException("Codex-Anmeldung prüfen");
                 var quotas=ParseCodexLimits(response.GetProperty("result"));
-                lock(gate) codex=new("Codex","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Kein Zeitlimit vom Account geliefert":null);
+                lock(gate) codex=new("Codex","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Kein Zeitlimit vom Account geliefert":null,ParseCodexCredits(response.GetProperty("result")));
             }
             finally { if(!process.HasExited) process.Kill(true); await process.WaitForExitAsync(); await errorDrain; }
         }
@@ -88,21 +91,31 @@ public sealed class AiService : IDisposable
     private async Task UpdateClaude()
     {
         var sessions=ReadClaudeSessions();
+        if(DateTimeOffset.UtcNow<claudeRetryAt) { lock(gate) claude=claude with { Sessions=sessions }; return; }
         try
         {
             var credentials=ClaudeCredentials.Find() ?? throw new IOException("Keine gültige Claude-Anmeldung");
             var access=credentials.Token;
             using var req=new HttpRequestMessage(HttpMethod.Get,"https://api.anthropic.com/api/oauth/usage");
             req.Headers.Authorization=new AuthenticationHeaderValue("Bearer",access); req.Headers.Add("anthropic-beta","oauth-2025-04-20"); req.Headers.UserAgent.ParseAdd("PC-AI-Dashboard/1.0");
-            using var response=await http.SendAsync(req,stop.Token); response.EnsureSuccessStatusCode();
+            using var response=await http.SendAsync(req,stop.Token);
+            if(response.StatusCode==HttpStatusCode.TooManyRequests)
+            {
+                var retry=response.Headers.RetryAfter;
+                claudeRetryAt=retry?.Date??DateTimeOffset.UtcNow.Add(retry?.Delta??TimeSpan.FromMinutes(3));
+                if(claudeRetryAt<DateTimeOffset.UtcNow.AddSeconds(60)) claudeRetryAt=DateTimeOffset.UtcNow.AddSeconds(60);
+                lock(gate) claude=claude with {Status="Abrufpause",Sessions=sessions,Detail="Claude begrenzt die Abfragen; letzter bekannter Stand"};
+                return;
+            }
+            response.EnsureSuccessStatusCode();
             using var body=JsonDocument.Parse(await response.Content.ReadAsStringAsync(stop.Token));
             var quotas=ParseClaudeLimits(body.RootElement);
-            lock(gate) claude=new("Claude","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Keine Limits vom Account geliefert":credentials.Source);
+            lock(gate) claude=new("Claude","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Keine Limits vom Account geliefert":credentials.Source,ParseClaudeCredits(body.RootElement));
         }
         catch(Exception) when(!stop.IsCancellationRequested)
         {
             var local=ReadClaudeStatusLimits();
-            lock(gate) claude=local!=null?new("Claude","Sitzungsdaten",local.Value.Quotas,sessions,local.Value.Time,"Werte aus Claude Code; Zeitstempel beachten"):claude with { Status="Nicht erreichbar",Sessions=sessions,Detail="Claude Code anmelden; lokale Statuszeile liefert zusätzlich Kontextdaten" };
+            lock(gate) claude=local!=null?claude with {Name="Claude",Status="Sitzungsdaten",Quotas=local.Value.Quotas,Sessions=sessions,Detail="Werte aus Claude Code; Guthaben ist letzter bekannter Stand"}:claude with { Status="Nicht erreichbar",Sessions=sessions,Detail="Claude Code anmelden; lokale Statuszeile liefert zusätzlich Kontextdaten" };
         }
     }
     public static List<Quota> ParseClaudeLimits(JsonElement data)
@@ -117,6 +130,55 @@ public sealed class AiService : IDisposable
             q.Add(new(label,Math.Clamp(used,0,100),reset));
         }
         return q;
+    }
+    public static CreditUsage? ParseCodexCredits(JsonElement data)
+    {
+        JsonElement bucket;
+        if(data.TryGetProperty("rateLimitsByLimitId",out var buckets) && buckets.ValueKind==JsonValueKind.Object && buckets.TryGetProperty("codex",out bucket)) { }
+        else if(!data.TryGetProperty("rateLimits",out bucket)) return null;
+        if(bucket.ValueKind!=JsonValueKind.Object || !bucket.TryGetProperty("credits",out var credits) || credits.ValueKind!=JsonValueKind.Object) return null;
+        bool unlimited=credits.TryGetProperty("unlimited",out var u) && u.ValueKind==JsonValueKind.True;
+        bool has=credits.TryGetProperty("hasCredits",out var h) && h.ValueKind==JsonValueKind.True;
+        double? balance=Number(credits,"balance",true);
+        return new("Live",balance,"Credits",unlimited,Detail:unlimited?null:balance.HasValue?null:has?"Guthaben vorhanden; Betrag nicht bereitgestellt":"Kein Credits-Guthaben");
+    }
+    public static CreditUsage? ParseClaudeCredits(JsonElement data)
+    {
+        bool hasExtra=data.TryGetProperty("extra_usage",out var extra) && extra.ValueKind==JsonValueKind.Object;
+        if(data.TryGetProperty("spend",out var spend) && spend.ValueKind==JsonValueKind.Object)
+        {
+            var balance=Money(spend,"balance",true); var used=Money(spend,"used"); var limit=Money(spend,"limit");
+            string? spendUnit=balance?.Currency??used?.Currency??limit?.Currency;
+            if(spendUnit!=null)
+            {
+                bool active=spend.TryGetProperty("enabled",out var enabledValue)&&enabledValue.ValueKind==JsonValueKind.True;
+                return new("Live",balance?.Value,spendUnit,Spent:used?.Currency==spendUnit?used?.Value:null,
+                    Limit:limit?.Currency==spendUnit?limit?.Value:null,Enabled:active,Detail:balance==null?"Restguthaben nicht vom Anbieter bereitgestellt":null);
+            }
+        }
+        if(!hasExtra) return null;
+        bool enabled=extra.TryGetProperty("is_enabled",out var e)&&e.ValueKind==JsonValueKind.True;
+        string unit=extra.TryGetProperty("currency",out var currency)&&currency.ValueKind==JsonValueKind.String?currency.GetString()!:"USD";
+        int places=extra.TryGetProperty("decimal_places",out var decimals)&&decimals.TryGetInt32(out var p)&&p is >=0 and <=6?p:2;
+        double divisor=Math.Pow(10,places);
+        return new("Live",null,unit,Spent:Divide(Number(extra,"used_credits")),Limit:Divide(Number(extra,"monthly_limit")),Enabled:enabled,Detail:"Restguthaben nicht vom Anbieter bereitgestellt");
+        double? Divide(double? value)=>value.HasValue?value/divisor:null;
+    }
+    private static (double Value,string Currency)? Money(JsonElement obj,string name,bool allowNegative=false)
+    {
+        if(!obj.TryGetProperty(name,out var money) || money.ValueKind!=JsonValueKind.Object ||
+            !money.TryGetProperty("currency",out var currency) || currency.ValueKind!=JsonValueKind.String ||
+            !money.TryGetProperty("exponent",out var exponent) || !exponent.TryGetInt32(out var places) || places is <0 or >6) return null;
+        var raw=Number(money,"amount_minor",allowNegative); var unit=currency.GetString();
+        if(raw==null || !System.Text.RegularExpressions.Regex.IsMatch(unit??"","^[A-Z]{3}$")) return null;
+        return (raw.Value/Math.Pow(10,places),unit!);
+    }
+    private static double? Number(JsonElement obj,string name,bool allowNegative=false)
+    {
+        if(!obj.TryGetProperty(name,out var v)) return null;
+        double number=0;
+        bool parsed=v.ValueKind==JsonValueKind.Number?v.TryGetDouble(out number):v.ValueKind==JsonValueKind.String&&double.TryParse(v.GetString(),NumberStyles.Float,CultureInfo.InvariantCulture,out number);
+        return parsed && double.IsFinite(number) && (allowNegative || number>=0)?number:null;
     }
     private static List<SessionUsage> ReadCodexSessions()
     {

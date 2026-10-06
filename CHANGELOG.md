@@ -2,7 +2,15 @@
 
 Versions refer to source and Windows packages. They do not imply a published GitHub Release.
 
-## Unreleased
+## 1.0.2 — 2026-10-06
+
+- Display Codex credit balances and Claude funded balances when provided, with monthly spending shown separately from prepaid funds.
+- Preserve credit values during connection failures and respect Claude rate-limit retry delays.
+- Enlarge account and storage text and reduce the temperature row to improve readability on the small display.
+- Label temperature bars in degrees and add a configurable upper scale, defaulting to 100 °C.
+- Add actual OCTO PWM rings alongside pump and fan RPM readings.
+- Format storage percentages with two decimal places and a German decimal comma.
+- Expand verification to 29 data/protocol checks and 7 interface tests.
 
 - Standardize the English README, public repository badges, setup guides, architecture notes, and security documentation.
 - Translate build messages and project description into English.
