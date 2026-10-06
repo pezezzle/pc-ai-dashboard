@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+node_modules/
+artifacts/
+tools/.bin/
+.vs/
+*.user
+*.log
+*.local.json
+*.database*
+settings.json
+test-results/

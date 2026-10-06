@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "none",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "outDir": "src/PcAiDashboard/Web",
+    "removeComments": true,
+    "skipLibCheck": true
+  },
+  "include": ["ui/main.ts"]
+}

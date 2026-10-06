@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><title>PC · AI Dashboard</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+  <div id="background"><div id="youtube"></div><video id="local-video" loop playsinline></video></div>
+  <div id="shade"></div>
+  <div id="stage">
+    <header>
+      <div class="brand"><span class="brand-mark">◈</span> <strong>PC<span> / </span>AI</strong><span class="brand-sub">SYSTEM DASHBOARD</span></div>
+      <div id="live-state"><i></i><span>Verbinden</span></div>
+      <div class="toolbar">
+        <button id="play" title="Video pausieren / starten" aria-label="Video pausieren / starten">▶</button>
+        <button id="mute" title="Ton ein / aus" aria-label="Ton ein / aus">◌</button>
+        <input id="volume" aria-label="Lautstärke" title="Lautstärke" type="range" min="0" max="100" value="25">
+        <button id="cinema" title="YouTube-Player bedienen" aria-label="Player bedienen">▣</button>
+        <button id="fullscreen" title="Vollbild umschalten" aria-label="Vollbild umschalten">⛶</button>
+        <button id="settings-button" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+      </div>
+      <time id="clock">--:--:--</time>
+    </header>
+    <main id="dashboard">
+      <section class="compute">
+        <article class="card compute-card" id="cpu-card"><div class="eyebrow"><span>CPU</span><span class="muted">PACKAGE / TOTAL</span></div><div class="compute-values"><div><strong data-metric="cpuTemp">—</strong><span class="unit">°C</span></div><div class="secondary"><strong data-metric="cpuLoad">—</strong><span class="unit">%</span></div></div><div class="compute-bottom"><span>Temperatur <span class="muted">/ Auslastung</span></span><svg id="cpu-spark" viewBox="0 0 150 28" preserveAspectRatio="none" aria-label="Verlauf der CPU-Auslastung"></svg></div><div class="track"><i data-bar="cpuLoad"></i></div></article>
+        <article class="card compute-card" id="gpu-card"><div class="eyebrow"><span>GPU</span><span class="muted">CORE / USAGE</span></div><div class="compute-values"><div><strong data-metric="gpuTemp">—</strong><span class="unit">°C</span></div><div class="secondary"><strong data-metric="gpuLoad">—</strong><span class="unit">%</span></div></div><div class="compute-bottom"><span>Temperatur <span class="muted">/ Auslastung</span></span><svg id="gpu-spark" viewBox="0 0 150 28" preserveAspectRatio="none" aria-label="Verlauf der GPU-Auslastung"></svg></div><div class="track"><i data-bar="gpuLoad"></i></div></article>
+        <article class="card memory-card"><div class="eyebrow"><span>MEMORY</span><span class="muted" id="ram-total">— GB TOTAL</span></div><div class="compute-values"><div><strong data-metric="ramUsed">—</strong><span class="unit">GB</span></div><div class="secondary"><strong data-metric="ramLoad">—</strong><span class="unit">%</span></div></div><div class="compute-bottom"><span>Arbeitsspeicher belegt</span><span class="muted" id="ram-free">— GB frei</span></div><div class="track"><i data-bar="ramLoad"></i></div></article>
+      </section>
+      <section class="cooling">
+        <article class="card temp-card"><div><span class="eyebrow">PUMP COOLANT</span><div class="temp-value"><strong data-metric="coolantPump">—</strong><span>°C</span></div></div><div class="thermo"><i data-temp="coolantPump"></i></div></article>
+        <article class="card temp-card"><div><span class="eyebrow">RADIATOR COOLANT</span><div class="temp-value"><strong data-metric="coolantRadiator">—</strong><span>°C</span></div></div><div class="thermo"><i data-temp="coolantRadiator"></i></div></article>
+        <article class="card temp-card"><div><span class="eyebrow">CASE TEMPERATURE</span><div class="temp-value"><strong data-metric="caseTemp">—</strong><span>°C</span></div></div><div class="thermo"><i data-temp="caseTemp"></i></div></article>
+        <article class="card delta-card"><span class="eyebrow">COOLANT ΔT</span><div class="temp-value"><strong id="delta-temp">—</strong><span>°C</span></div></article>
+      </section>
+      <section class="fans">
+        <article class="card fan-card pump"><span class="fan-icon">◎</span><div><span class="eyebrow">PUMPE</span><div><strong data-metric="pumpRpm">—</strong><span class="unit">RPM</span></div></div></article>
+        <article class="card fan-card"><span class="fan-icon">✣</span><div><span class="eyebrow">TOP</span><div><strong data-metric="topRpm">—</strong><span class="unit">RPM</span></div></div></article>
+        <article class="card fan-card"><span class="fan-icon">✣</span><div><span class="eyebrow">SIDE</span><div><strong data-metric="sideRpm">—</strong><span class="unit">RPM</span></div></div></article>
+        <article class="card fan-card"><span class="fan-icon">✣</span><div><span class="eyebrow">BOTTOM</span><div><strong data-metric="bottomRpm">—</strong><span class="unit">RPM</span></div></div></article>
+        <article class="card fan-card"><span class="fan-icon">✣</span><div><span class="eyebrow">BACK</span><div><strong data-metric="backRpm">—</strong><span class="unit">RPM</span></div></div></article>
+      </section>
+      <section class="bottom-grid">
+        <article class="card ai-card" id="codex-card"><div class="eyebrow"><span class="provider-name">◈ CODEX</span><span class="provider-state muted">Verbinden</span></div><div class="quotas"></div><div class="context"><div class="context-label"><span>KONTEXT</span><select aria-label="Codex-Chat auswählen" class="session-select"></select></div><div class="context-value">Noch keine Sitzungsdaten</div></div></article>
+        <article class="card ai-card" id="claude-card"><div class="eyebrow"><span class="provider-name">✳ CLAUDE</span><span class="provider-state muted">Verbinden</span></div><div class="quotas"></div><div class="context"><div class="context-label"><span>KONTEXT</span><select aria-label="Claude-Chat auswählen" class="session-select"></select></div><div class="context-value">Ab nächster Claude-Code-Sitzung</div></div></article>
+        <article class="card disks-card"><div class="eyebrow"><span>STORAGE</span><span class="muted">BELEGT / GESAMT</span></div><div id="drives"></div></article>
+      </section>
+    </main>
+    <footer><span id="hardware-state">Sensoren werden verbunden …</span><span id="media-state">Kein Video ausgewählt</span><span id="update-state">LOKAL · 1 SEKUNDE</span></footer>
+  </div>
+  <div id="notice" role="status"></div>
+  <button id="leave-cinema" hidden>← Dashboard anzeigen</button>
+  <dialog id="settings-dialog">
+    <div class="dialog-title"><div><span class="eyebrow">PC / AI</span><h1>Einstellungen</h1></div><button id="close-settings" aria-label="Einstellungen schließen">✕</button></div>
+    <form id="settings-form">
+      <div class="settings-grid">
+        <fieldset><legend>Anzeige</legend><label>Monitor<select name="displayId" id="display-select"></select></label><div class="checks"><label><input type="checkbox" name="fullscreen">Vollbild</label><label><input type="checkbox" name="alwaysOnTop">Immer im Vordergrund</label><label><input type="checkbox" name="autostart">Mit Windows starten</label><label><input type="checkbox" name="startAquasuite">Aquasuite bei Bedarf starten</label></div><label>Akzentfarbe<input type="color" name="accent"></label><label>Karten-Deckkraft<input type="range" name="cardOpacity" min="0.1" max="1" step="0.01"></label></fieldset>
+        <fieldset><legend>Video & Ton</legend><label>Hintergrund<select name="backgroundMode"><option value="gradient">Ruhiger Farbverlauf</option><option value="youtube">YouTube</option><option value="local">Lokales Video</option></select></label><label>YouTube-Link oder Video-ID<input name="youtubeUrl" placeholder="https://www.youtube.com/watch?v=…"></label><label>Lokales Video<input name="localVideoPath" readonly placeholder="Keine Datei ausgewählt"></label><button type="button" id="pick-video">Videodatei auswählen</button><label>Hintergrund abdunkeln<input type="range" name="dim" min="0" max="0.95" step="0.01"></label><label><input type="checkbox" name="muted">Ton ausgeschaltet</label><label>Lautstärke<input type="range" name="volume" min="0" max="100" step="1"></label></fieldset>
+        <fieldset><legend>Aquasuite & Sensoren</legend><label>Shared-Memory-Name<input name="aquasuiteSharedMemory"></label><label>XML-Datei (optional, ersetzt Shared Memory)<input name="aquasuiteXmlPath" placeholder="C:\…\sensors.xml"></label><div class="channel-grid"><label>Pumpe<select name="pumpChannel"></select></label><label>Top<select name="topChannel"></select></label><label>Side<select name="sideChannel"></select></label><label>Bottom<select name="bottomChannel"></select></label><label>Back<select name="backChannel"></select></label></div><div class="channel-grid"><label>Pump Coolant<select name="pumpTempChannel"></select></label><label>Radiator<select name="radiatorTempChannel"></select></label><label>Case<select name="caseTempChannel"></select></label></div><p>OCTO-Kanäle werden nur gelesen. CPU Package kommt aus deinem Aquasuite-Export.</p></fieldset>
+        <fieldset><legend>KI & Bedienung</legend><p>Account-Limits werden alle 60 Sekunden gelesen. Kontext gehört zu einem einzelnen Chat. Die Auswahl erfolgt direkt in der Anzeige.</p><p>Die Claude-Code-Statuszeile liefert Kontextwerte ab der nächsten Sitzung. Bestehende Statuszeilen werden erhalten.</p><p>F11: Vollbild · Esc: Fenster · Infobereich: Öffnen / Beenden</p><div class="settings-actions"><button type="button" id="capture">Screenshot speichern</button><button type="button" id="open-data">Datenordner öffnen</button><button type="button" id="minimize">In Infobereich</button><button type="button" id="exit">App beenden</button></div></fieldset>
+      </div>
+      <div class="dialog-footer"><span id="settings-status">Einstellungen bleiben auf diesem PC.</span><button type="submit" class="primary-button">Speichern</button></div>
+    </form>
+  </dialog>
+  <script src="main.js"></script>
+</body></html>
