@@ -24,6 +24,8 @@ let browser,encoder;
   page.on('response',async r=>{if(r.url().startsWith('http://127.0.0.1:')) console.log('Media response:',r.status(),r.headers()['content-type']);});
   try{
     await page.evaluate(s=>window.chrome.webview.postMessage({type:'saveSettings',settings:s}),{...original,backgroundMode:'local',localVideoPath:videoPath,muted:true});
+    await page.waitForFunction(()=>document.querySelector('#local-video').readyState>=2,{},{timeout:10000});
+    if(await page.locator('#local-video').evaluate(v=>v.paused)) await page.locator('#play').click();
     await page.waitForFunction(()=>document.querySelector('#local-video').currentTime>.5,{},{timeout:10000});
     const duration=await page.locator('#local-video').evaluate(v=>v.duration);
     if(duration>11070) {

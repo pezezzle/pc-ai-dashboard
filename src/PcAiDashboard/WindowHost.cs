@@ -33,7 +33,8 @@ public partial class MainWindow : Window
         try
         {
             InitializeTray(); ApplyDisplay(); StartAquasuite(); InstallClaudeIntegration();
-            var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(AppFiles.Root,"WebView2"));
+            var options=new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments="--autoplay-policy=no-user-gesture-required" };
+            var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(AppFiles.Root,"WebView2"),options);
             await Browser.EnsureCoreWebView2Async(env);
             var core=Browser.CoreWebView2;
             core.Settings.IsStatusBarEnabled=false; core.Settings.AreDefaultContextMenusEnabled=false;
