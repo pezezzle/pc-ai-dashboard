@@ -20,6 +20,11 @@ public sealed class DashboardSettings
     public bool Fullscreen { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
     public bool Autostart { get; set; }
+    public bool ScreenSaverTimerEnabled { get; set; }
+    public int ScreenSaverIdleMinutes { get; set; } = 10;
+    // The saver always covers all monitors. Null shows dashboard cards everywhere;
+    // an explicit empty list shows only the background on every monitor.
+    public List<string>? ScreenSaverDashboardDisplayIds { get; set; }
     public bool StartAquasuite { get; set; } = true;
     public string BackgroundMode { get; set; } = "gradient";
     public string YoutubeUrl { get; set; } = "";
@@ -46,6 +51,9 @@ public sealed class DashboardSettings
     public static DashboardSettings Validate(DashboardSettings s)
     {
         s.Volume = Math.Clamp(s.Volume, 0, 100);
+        s.ScreenSaverIdleMinutes = Math.Clamp(s.ScreenSaverIdleMinutes, 1, 240);
+        s.ScreenSaverDashboardDisplayIds = s.ScreenSaverDashboardDisplayIds?.Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(64).ToList();
         s.Dim = Math.Clamp(double.IsFinite(s.Dim) ? s.Dim : .5, 0, .95);
         s.CardOpacity = Math.Clamp(double.IsFinite(s.CardOpacity) ? s.CardOpacity : .76, .1, 1);
         s.TemperatureScaleMax = Math.Clamp(s.TemperatureScaleMax,40,120);

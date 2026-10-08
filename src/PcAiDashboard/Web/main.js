@@ -2,7 +2,8 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const bridge = window.chrome?.webview;
-let settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
+let settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '', screenSaverTimerEnabled: false, screenSaverIdleMinutes: 10, screenSaverDashboardDisplayIds: null };
+let availableDisplays = [];
 let latest = null;
 let player = null;
 let youtubeReady = false;
@@ -181,7 +182,12 @@ function renderCredits(card, provider) {
     container.title = `${credit?.detail ?? detail} · Aktualisierung alle 60 Sekunden · ${age(provider.updatedAt)}`;
 }
 function applyConfiguration(config) {
-    settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100 };
+    settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100, screenSaverTimerEnabled: config.settings.screenSaverTimerEnabled ?? false, screenSaverIdleMinutes: config.settings.screenSaverIdleMinutes ?? 10, screenSaverDashboardDisplayIds: config.settings.screenSaverDashboardDisplayIds ?? null };
+    availableDisplays = config.displays;
+    document.body.classList.toggle('screensaver', config.screenSaver === true);
+    document.body.classList.toggle('screensaver-video-only', config.screenSaver === true && config.showDashboard === false);
+    document.body.dataset.displayId = config.displayId ?? '';
+    updateScreenSaverControls();
     localMediaUrl = config.mediaUrl ?? '';
     applyAppearance();
     $('#mute').textContent = settings.muted ? '◌' : '♫';
@@ -190,6 +196,7 @@ function applyConfiguration(config) {
     const displays = $('#display-select');
     displays.replaceChildren();
     config.displays.forEach(d => displays.add(new Option(d.label, d.id)));
+    updateScreenSaverDisplays();
     for (const control of Array.from(form.elements))
         if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
             if (!control.name || !(control.name in settings))
@@ -215,10 +222,59 @@ function applyAppearance() {
         updateTemperatureBars(new Map(latest.metrics.map(m => [m.id, m])));
 }
 function save() { send('saveSettings', { settings }); if (!bridge)
-    applyConfiguration({ settings, displays: [{ id: '', label: 'Vorschau' }] }); }
+    applyConfiguration({ settings, displays: availableDisplays }); }
+function updateScreenSaverDisplays() {
+    const container = $('#screensaver-displays');
+    container.replaceChildren();
+    for (const display of availableDisplays) {
+        const label = element('label', '');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.dataset.displayId = display.id;
+        input.checked = settings.screenSaverDashboardDisplayIds === null || settings.screenSaverDashboardDisplayIds.some(id => id.toLowerCase() === display.id.toLowerCase());
+        input.onchange = () => {
+            const disconnected = (settings.screenSaverDashboardDisplayIds ?? []).filter(id => !availableDisplays.some(d => d.id.toLowerCase() === id.toLowerCase()));
+            settings.screenSaverDashboardDisplayIds = [...disconnected, ...$$('#screensaver-displays input:checked').map(c => c.dataset.displayId)];
+            updateScreenSaverSelectionStatus();
+            save();
+        };
+        label.append(input, document.createTextNode(display.label));
+        container.append(label);
+    }
+    updateScreenSaverSelectionStatus();
+}
+function updateScreenSaverSelectionStatus() {
+    const count = availableDisplays.filter(d => settings.screenSaverDashboardDisplayIds === null || settings.screenSaverDashboardDisplayIds.some(id => id.toLowerCase() === d.id.toLowerCase())).length;
+    text('#screensaver-selection-status', `Dashboard: ${count} ${count === 1 ? 'Bildschirm' : 'Bildschirme'} · Nur Hintergrundvideo: ${availableDisplays.length - count}`);
+    $('#screensaver-start').title = 'Bildschirmschoner auf allen Monitoren starten · Eingabe beendet ihn';
+}
+$('#screensaver-all').onclick = () => { settings.screenSaverDashboardDisplayIds = null; updateScreenSaverDisplays(); save(); };
+$('#screensaver-none').onclick = () => { settings.screenSaverDashboardDisplayIds = []; updateScreenSaverDisplays(); save(); };
+function updateScreenSaverControls() {
+    const toggle = $('#screensaver-timer');
+    toggle.textContent = settings.screenSaverTimerEnabled ? 'Timer: an' : 'Timer: aus';
+    toggle.setAttribute('aria-pressed', String(settings.screenSaverTimerEnabled));
+    toggle.title = settings.screenSaverTimerEnabled ? `Aktiv: nach ${settings.screenSaverIdleMinutes} Min. ohne Eingabe · Klicken zum Ausschalten` : 'Automatischen Bildschirmschoner einschalten';
+    $('#screensaver-minutes').value = String(settings.screenSaverIdleMinutes);
+}
+$('#screensaver-start').onclick = () => send('startScreenSaver');
+$('#screensaver-timer').onclick = () => { settings.screenSaverTimerEnabled = !settings.screenSaverTimerEnabled; updateScreenSaverControls(); save(); };
+$('#screensaver-minutes').onchange = event => {
+    const input = event.target;
+    const value = input.valueAsNumber;
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1 || value > 240) {
+        updateScreenSaverControls();
+        showNotice('Bitte eine Wartezeit zwischen 1 und 240 Minuten eingeben.');
+        return;
+    }
+    settings.screenSaverIdleMinutes = value;
+    updateScreenSaverControls();
+    save();
+};
 window.openSettings = () => { if (!dialog.open)
     dialog.showModal(); };
 $('#settings-button').onclick = window.openSettings;
+$('#screensaver-config').onclick = () => { window.openSettings(); $('#screensaver-settings').scrollIntoView({ block: 'center' }); };
 $('#close-settings').onclick = () => dialog.close();
 for (const name of ['accent', 'textColor', 'cardOpacity', 'dim']) {
     const control = form.elements.namedItem(name);

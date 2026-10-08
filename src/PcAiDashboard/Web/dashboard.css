@@ -1,4 +1,17 @@
 /* Rebalance the small display around the account and storage cards. */
+header{gap:10px}.brand-sub{display:none}
+.screensaver-controls{display:flex;align-items:center;gap:5px;border-left:1px solid var(--line);padding-left:8px;margin-left:3px}
+.toolbar .screensaver-controls button{width:auto;padding:0 8px;font-size:11px;white-space:nowrap}
+.toolbar #screensaver-config{width:28px;padding:0;font-size:16px}
+.screensaver-controls button[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.screensaver-controls label{display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;color:var(--muted)}
+.toolbar .screensaver-controls input{display:inline-block;width:47px;height:28px;margin:0;padding:3px;background:#10202b;color:var(--text);border:1px solid var(--line);border-radius:5px;font-size:12px}
+body.screensaver,body.screensaver *{cursor:none!important}
+.screensaver .toolbar{display:none}.screensaver .session-select{pointer-events:none}
+#local-video{object-fit:fill}
+.screensaver-video-only #stage,.screensaver-video-only #shade{display:none}
+#screensaver-displays{display:flex;flex-direction:column;gap:9px;margin:12px 0}
+#screensaver-displays label{display:flex;align-items:center;gap:5px;font-size:12px;line-height:1.5}
 #stage { gap: 6px; }
 main { gap: 8px; }
 .compute { height: 110px; }

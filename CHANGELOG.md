@@ -2,6 +2,15 @@
 
 Versions refer to source and Windows packages. They do not imply a published GitHub Release.
 
+## Unreleased
+
+- Add an in-app screensaver on every connected monitor, with manual start, a saved timer toggle, and a configurable 1–240 minute inactivity wait in the toolbar.
+- Share live sensor/account snapshots and the local video server across all screensaver windows; keep copies muted while normal dashboard audio continues.
+- Dismiss all screensaver windows together on mouse/keyboard input, monitor changes, or session locking, and restore the normal dashboard's visibility.
+- Add saved per-monitor checkboxes for dashboard cards; keep the video screensaver running on every monitor, including an all-video option.
+- Stretch local backgrounds to fill portrait monitors and increase video concurrency from four to 32 responses so all monitor players can start while the normal app remains open.
+- Expand verification to 44 data/protocol checks and 14 interface tests, plus a local five-monitor integration check that measures video progression on each monitor.
+
 ## 1.0.3 — 2026-10-08
 
 - Add a prominent Codex banner for banked manual resets, with the available count and a known expiry date.

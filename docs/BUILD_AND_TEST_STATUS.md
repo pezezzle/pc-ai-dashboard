@@ -32,8 +32,10 @@ GitHub Actions runs the build, checks generated JavaScript consistency, runs the
 | Check | Result |
 |---|---|
 | Release build | Passed with zero warnings and errors |
-| Data and media protocol checks | 34 passed, including reset counts, expiry filtering, credit units, missing balances, and PWM decoding |
-| Edge interface tests | 10 passed, including manual availability/staleness, two quota windows, credits, unclipped larger text, PWM rings, and storage decimals |
+| Data and media protocol checks | 44 passed, including dashboard monitor selection/defaults/persistence, six simultaneous long-running video responses plus metadata, inactivity thresholds, disabled timers, tick rollover, reset counts, expiry filtering, credit units, missing balances, and PWM decoding |
+| Edge interface tests | 14 passed, including dashboard checkboxes, all-video mode, portrait stretching, screensaver toolbar fit, manual command, timer persistence/validation, hidden saver controls, manual availability/staleness, two quota windows, credits, unclipped larger text, PWM rings, and storage decimals |
+| Screensaver | Manual and one-minute inactivity start, live data/background on five full-size monitor windows, mixed DPI/orientations, mouse/keyboard dismissal, return to the normal dashboard, repeated start/dismissal, and app shutdown during screensaver mode verified |
+| Screensaver video and selection | Time and decoded frames advance on all five monitors, including portrait, with stretched viewport-filling video; single-monitor dashboard and all-video mode both keep five fullscreen backgrounds |
 | Live hardware | CPU, GPU, RAM, fixed-drive storage, OCTO temperatures, pump and four fan groups verified |
 | AI usage | Codex and Claude windows verified with valid provider sessions |
 | Credits and layout | Live Codex balance, Claude monthly spending with unavailable funded balance, all five PWM channels, two-decimal storage, and unclipped bottom cards verified |
@@ -63,6 +65,12 @@ Without an argument, the media tool creates a short WebM. It temporarily changes
 `test-webview.cjs` verifies live readings and YouTube. It expects valid Claude/Codex sessions and a gradient background in its test setup. These are local integration checks, not CI tests.
 
 `node tools/test-credits-layout.cjs` verifies credit availability, actual PWM rings, storage formatting, degree scales, card fit, and uninterrupted local video during a subsequent account poll. It expects signed-in providers, an OCTO, and an already playing local background. It does not change settings or persist credentials.
+
+`node tools/test-screensaver.cjs` verifies one native fullscreen window per connected monitor, live readings, hidden controls, silent video copies, global mouse/keyboard dismissal, repeated starts, and the real one-minute inactivity timer. It briefly covers all monitors, nudges the cursor by one pixel, and sends the uncommon F24 key for dismissal without typing text or changing focus. The original timer settings are restored afterward. Keep mouse and keyboard idle during the timer portion; continued input correctly delays automatic start. `test-screensaver-native.ps1` supplies physical monitor/window geometry and input for this local check.
+
+The same tool checks advancing video time and decoded frames on every monitor, full viewport geometry and `object-fit: fill`, a dashboard on only the portrait monitor, and video-only backgrounds everywhere. It restores the original dashboard monitor selection too. The loopback server allows 32 concurrent responses; the previous four slots could be occupied by buffered long-running streams, preventing additional monitor players from starting.
+
+`node tools/test-screensaver-timer.cjs` isolates automatic start with the dashboard selected on the portrait monitor. It uses only the application's own bridge and WebViews, restores preferences afterward, and dismisses the saver through the host bridge without generating OS input.
 
 Close the test app and remove the debug environment variable before normal use:
 

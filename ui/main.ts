@@ -5,7 +5,7 @@ interface SessionUsage { id: string; label: string; usedPercent: number | null; 
 interface CreditUsage { status: string; balance: number | null; unit: string; unlimited: boolean; spent: number | null; limit: number | null; enabled: boolean; detail: string | null }
 interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null; credits?: CreditUsage | null; manualResets?: {availableCount: number; nextExpiresAt: number | null} | null }
 interface Snapshot { time: string; metrics: Metric[]; drives: DriveUsage[]; ai: AiUsage[]; hardwareStatus: string }
-interface Settings { [key: string]: string | number | boolean; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; textColor: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string }
+interface Settings { [key: string]: string | number | boolean | string[] | null; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; textColor: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string; screenSaverTimerEnabled: boolean; screenSaverIdleMinutes: number; screenSaverDashboardDisplayIds: string[] | null }
 interface DisplayInfo { id: string; label: string }
 interface Bridge { postMessage(data: unknown): void; addEventListener(type: string, callback: (event: MessageEvent) => void): void }
 interface YoutubePlayer { mute(): void; unMute(): void; setVolume(volume: number): void; playVideo(): void; pauseVideo(): void; getPlayerState(): number; destroy(): void }
@@ -14,7 +14,8 @@ interface Window { chrome?: { webview?: Bridge }; YT?: YoutubeApi; onYouTubeIfra
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 const $$ = <T extends HTMLElement = HTMLElement>(selector: string): T[] => [...document.querySelectorAll<T>(selector)];
 const bridge = window.chrome?.webview;
-let settings: Settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '' };
+let settings: Settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '', screenSaverTimerEnabled: false, screenSaverIdleMinutes: 10, screenSaverDashboardDisplayIds: null };
+let availableDisplays: DisplayInfo[] = [];
 let latest: Snapshot | null = null;
 let player: YoutubePlayer | null = null;
 let youtubeReady = false;
@@ -135,13 +136,19 @@ function renderCredits(card: HTMLElement, provider: AiUsage): void {
   container.title = `${credit?.detail ?? detail} · Aktualisierung alle 60 Sekunden · ${age(provider.updatedAt)}`;
 }
 
-function applyConfiguration(config: { settings: Settings; displays: DisplayInfo[]; mediaUrl?: string }): void {
-  settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100 };
+function applyConfiguration(config: { settings: Settings; displays: DisplayInfo[]; mediaUrl?: string; screenSaver?: boolean; showDashboard?: boolean; displayId?: string }): void {
+  settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100, screenSaverTimerEnabled: config.settings.screenSaverTimerEnabled ?? false, screenSaverIdleMinutes: config.settings.screenSaverIdleMinutes ?? 10, screenSaverDashboardDisplayIds: config.settings.screenSaverDashboardDisplayIds ?? null };
+  availableDisplays = config.displays;
+  document.body.classList.toggle('screensaver', config.screenSaver === true);
+  document.body.classList.toggle('screensaver-video-only', config.screenSaver === true && config.showDashboard === false);
+  document.body.dataset.displayId = config.displayId ?? '';
+  updateScreenSaverControls();
   localMediaUrl = config.mediaUrl ?? '';
   applyAppearance();
   $('#mute').textContent = settings.muted ? '◌' : '♫'; $('#mute').title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
   $<HTMLInputElement>('#volume').value = String(settings.volume);
   const displays = $<HTMLSelectElement>('#display-select'); displays.replaceChildren(); config.displays.forEach(d => displays.add(new Option(d.label, d.id)));
+  updateScreenSaverDisplays();
   for (const control of Array.from(form.elements)) if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
     if (!control.name || !(control.name in settings)) continue;
     if (control instanceof HTMLInputElement && control.type === 'checkbox') control.checked = Boolean(settings[control.name]); else control.value = String(settings[control.name]);
@@ -157,9 +164,49 @@ function applyAppearance(): void {
   $$('[data-temp-max]').forEach(el => { el.textContent = `${settings.temperatureScaleMax} °C`; });
   if (latest) updateTemperatureBars(new Map(latest.metrics.map(m => [m.id, m])));
 }
-function save(): void { send('saveSettings', { settings }); if (!bridge) applyConfiguration({ settings, displays: [{ id: '', label: 'Vorschau' }] }); }
+function save(): void { send('saveSettings', { settings }); if (!bridge) applyConfiguration({ settings, displays: availableDisplays }); }
+function updateScreenSaverDisplays(): void {
+  const container = $('#screensaver-displays'); container.replaceChildren();
+  for (const display of availableDisplays) {
+    const label = element('label', ''); const input = document.createElement('input');
+    input.type = 'checkbox'; input.dataset.displayId = display.id;
+    input.checked = settings.screenSaverDashboardDisplayIds === null || settings.screenSaverDashboardDisplayIds.some(id => id.toLowerCase() === display.id.toLowerCase());
+    input.onchange = () => {
+      const disconnected = (settings.screenSaverDashboardDisplayIds ?? []).filter(id => !availableDisplays.some(d => d.id.toLowerCase() === id.toLowerCase()));
+      settings.screenSaverDashboardDisplayIds = [...disconnected, ...$$<HTMLInputElement>('#screensaver-displays input:checked').map(c => c.dataset.displayId!)];
+      updateScreenSaverSelectionStatus(); save();
+    };
+    label.append(input, document.createTextNode(display.label)); container.append(label);
+  }
+  updateScreenSaverSelectionStatus();
+}
+function updateScreenSaverSelectionStatus(): void {
+  const count = availableDisplays.filter(d => settings.screenSaverDashboardDisplayIds === null || settings.screenSaverDashboardDisplayIds.some(id => id.toLowerCase() === d.id.toLowerCase())).length;
+  text('#screensaver-selection-status', `Dashboard: ${count} ${count === 1 ? 'Bildschirm' : 'Bildschirme'} · Nur Hintergrundvideo: ${availableDisplays.length-count}`);
+  $('#screensaver-start').title = 'Bildschirmschoner auf allen Monitoren starten · Eingabe beendet ihn';
+}
+$('#screensaver-all').onclick = () => { settings.screenSaverDashboardDisplayIds = null; updateScreenSaverDisplays(); save(); };
+$('#screensaver-none').onclick = () => { settings.screenSaverDashboardDisplayIds = []; updateScreenSaverDisplays(); save(); };
+function updateScreenSaverControls(): void {
+  const toggle = $('#screensaver-timer');
+  toggle.textContent = settings.screenSaverTimerEnabled ? 'Timer: an' : 'Timer: aus';
+  toggle.setAttribute('aria-pressed', String(settings.screenSaverTimerEnabled));
+  toggle.title = settings.screenSaverTimerEnabled ? `Aktiv: nach ${settings.screenSaverIdleMinutes} Min. ohne Eingabe · Klicken zum Ausschalten` : 'Automatischen Bildschirmschoner einschalten';
+  $<HTMLInputElement>('#screensaver-minutes').value = String(settings.screenSaverIdleMinutes);
+}
+$('#screensaver-start').onclick = () => send('startScreenSaver');
+$('#screensaver-timer').onclick = () => { settings.screenSaverTimerEnabled = !settings.screenSaverTimerEnabled; updateScreenSaverControls(); save(); };
+$<HTMLInputElement>('#screensaver-minutes').onchange = event => {
+  const input = event.target as HTMLInputElement;
+  const value = input.valueAsNumber;
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1 || value > 240) {
+    updateScreenSaverControls(); showNotice('Bitte eine Wartezeit zwischen 1 und 240 Minuten eingeben.'); return;
+  }
+  settings.screenSaverIdleMinutes = value; updateScreenSaverControls(); save();
+};
 window.openSettings = () => { if (!dialog.open) dialog.showModal(); };
 $('#settings-button').onclick = window.openSettings;
+$('#screensaver-config').onclick = () => { window.openSettings(); $('#screensaver-settings').scrollIntoView({ block: 'center' }); };
 $('#close-settings').onclick = () => dialog.close();
 for (const name of ['accent', 'textColor', 'cardOpacity', 'dim']) {
   const control = form.elements.namedItem(name) as HTMLInputElement;

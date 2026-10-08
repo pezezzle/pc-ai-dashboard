@@ -13,7 +13,9 @@ public sealed class LocalVideoServer : IDisposable
 {
     private readonly TcpListener listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource stop = new();
-    private readonly SemaphoreSlim slots = new(4);
+    // Every monitor can hold a long-running video response plus seek/metadata requests.
+    // Keep room for the normal dashboard too; each active response uses only 64 KiB.
+    private readonly SemaphoreSlim slots = new(32);
     private readonly string secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
     private readonly string origin;
     private volatile Media? selected;

@@ -14,29 +14,47 @@ namespace PcAiDashboard;
 
 public partial class MainWindow : Window
 {
-    private readonly HardwareService hardware=new();
-    private readonly AiService ai=new();
+    private readonly HardwareService hardware;
+    private readonly AiService ai;
     private readonly CancellationTokenSource stop=new();
-    private DashboardSettings settings=AppFiles.LoadSettings();
+    private DashboardSettings settings;
     private readonly Forms.NotifyIcon tray=new();
     private bool ready;
     private const string Origin="https://pc-ai-dashboard.local";
-    private readonly LocalVideoServer videoServer=new(Origin);
-    public MainWindow()
+    private readonly LocalVideoServer videoServer;
+    private readonly MainWindow? dashboardOwner;
+    private readonly DisplayInfo? screenSaverDisplay;
+    private readonly ScreenSaverController? screenSaver;
+    private DashboardSnapshot? lastSnapshot;
+    public bool IsClosed { get; private set; }
+    public bool IsReady => ready && !IsClosed;
+    public DashboardSettings CurrentSettings => settings;
+    public MainWindow() : this(null, null) { }
+    internal MainWindow(MainWindow? owner, DisplayInfo? display)
     {
+        dashboardOwner=owner; screenSaverDisplay=display;
+        hardware=owner?.hardware??new(); ai=owner?.ai??new();
+        videoServer=owner?.videoServer??new(Origin);
+        settings=owner?.settings??AppFiles.LoadSettings();
         InitializeComponent();
+        if(owner==null) screenSaver=new(this);
+        else { ShowInTaskbar=false; ShowActivated=false; Cursor=System.Windows.Input.Cursors.None; Title="PC · AI Dashboard · Bildschirmschoner"; }
         Loaded+=OnLoaded; Closed+=OnClosed;
-        PreviewKeyDown+=(_,e)=> { if(e.Key==Key.F11) { settings.Fullscreen=!settings.Fullscreen; ApplyDisplay(); AppFiles.SaveSettings(settings); } if(e.Key==Key.Escape && settings.Fullscreen) { settings.Fullscreen=false; ApplyDisplay(); } };
+        PreviewKeyDown+=(_,e)=> { if(dashboardOwner!=null) { dashboardOwner.screenSaver?.Stop(); e.Handled=true; return; } if(e.Key==Key.F11) { settings.Fullscreen=!settings.Fullscreen; ApplyDisplay(); AppFiles.SaveSettings(settings); } if(e.Key==Key.Escape && settings.Fullscreen) { settings.Fullscreen=false; ApplyDisplay(); } };
     }
     private async void OnLoaded(object sender,RoutedEventArgs e)
     {
+        if(IsClosed || Browser.CoreWebView2!=null) return;
         try
         {
-            InitializeTray(); ApplyDisplay(); StartAquasuite(); InstallClaudeIntegration();
+            ApplyDisplay();
+            if(dashboardOwner==null) { InitializeTray(); StartAquasuite(); InstallClaudeIntegration(); }
             var options=new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments="--autoplay-policy=no-user-gesture-required" };
             var env=await CoreWebView2Environment.CreateAsync(null,Path.Combine(AppFiles.Root,"WebView2"),options);
+            if(IsClosed) return;
             await Browser.EnsureCoreWebView2Async(env);
-            var core=Browser.CoreWebView2;
+            if(IsClosed) return;
+            var core=Browser.CoreWebView2!;
             core.Settings.IsStatusBarEnabled=false; core.Settings.AreDefaultContextMenusEnabled=false;
             core.SetVirtualHostNameToFolderMapping("pc-ai-dashboard.local",Path.Combine(AppContext.BaseDirectory,"Web"),CoreWebView2HostResourceAccessKind.DenyCors);
             core.NavigationStarting+=(_,args)=> { if(!args.Uri.StartsWith(Origin+"/",StringComparison.OrdinalIgnoreCase)) args.Cancel=true; };
@@ -45,9 +63,9 @@ public partial class MainWindow : Window
             core.WebMessageReceived+=OnMessage;
             core.ProcessFailed+=(_,args)=>AppFiles.Log("WebView2: "+args.ProcessFailedKind);
             core.Navigate(Origin+"/index.html");
-            _=Task.Run(PumpSnapshots);
+            if(dashboardOwner==null) _=Task.Run(PumpSnapshots);
         }
-        catch(Exception ex) { AppFiles.Log("Start fehlgeschlagen: "+ex.GetType().Name+" "+ex.Message); MessageBox.Show("Die Anzeige konnte nicht starten.\n"+ex.Message,"PC · AI Dashboard",MessageBoxButton.OK,MessageBoxImage.Error); Close(); }
+        catch(Exception ex) { if(IsClosed) return; AppFiles.Log("Start fehlgeschlagen: "+ex.GetType().Name+" "+ex.Message); if(dashboardOwner==null) MessageBox.Show("Die Anzeige konnte nicht starten.\n"+ex.Message,"PC · AI Dashboard",MessageBoxButton.OK,MessageBoxImage.Error); Close(); }
     }
     private async Task PumpSnapshots()
     {
@@ -56,17 +74,29 @@ public partial class MainWindow : Window
             try
             {
                 var result=hardware.Read(settings); var snapshot=new DashboardSnapshot(DateTimeOffset.Now,result.Metrics,result.Drives,ai.Read(),result.Status);
-                await Dispatcher.InvokeAsync(()=> { if(ready) Send(new {type="snapshot",data=snapshot}); });
+                await Dispatcher.InvokeAsync(()=> { ReceiveSnapshot(snapshot); screenSaver?.Broadcast(snapshot); });
             }catch(Exception e) { AppFiles.Log("Messwerte: "+e.GetType().Name); }
             try { await Task.Delay(1000,stop.Token); }catch(OperationCanceledException) { break; }
         }
     }
-    private void Send(object value)=>Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value,AppFiles.Json));
+    internal void ReceiveSnapshot(DashboardSnapshot snapshot)
+    {
+        lastSnapshot=snapshot;
+        if(IsReady) Send(new {type="snapshot",data=snapshot});
+    }
+    private void Send(object value) { if(!IsClosed) Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value,AppFiles.Json)); }
     private void SendConfiguration()
     {
-        videoServer.Configure(settings.LocalVideoPath);
+        if(dashboardOwner==null) videoServer.Configure(settings.LocalVideoPath);
         string mediaUrl=File.Exists(settings.LocalVideoPath)?videoServer.Url:"";
-        Send(new {type="configuration",settings,mediaUrl,displays=GetDisplays(),integration=File.Exists(Path.Combine(AppFiles.Root,"claude-statusline.cjs"))});
+        var effectiveSettings=settings;
+        if(dashboardOwner!=null)
+        {
+            effectiveSettings=JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(settings,AppFiles.Json),AppFiles.Json)!;
+            effectiveSettings.Muted=true;
+        }
+        bool showDashboard=screenSaverDisplay==null || ScreenSaverController.ShowsDashboard(screenSaverDisplay.Id,settings.ScreenSaverDashboardDisplayIds);
+        Send(new {type="configuration",settings=effectiveSettings,mediaUrl,screenSaver=dashboardOwner!=null,showDashboard,displayId=screenSaverDisplay?.Id,displays=GetDisplays(),integration=File.Exists(Path.Combine(AppFiles.Root,"claude-statusline.cjs"))});
     }
     private async void OnMessage(object? sender,CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -74,9 +104,12 @@ public partial class MainWindow : Window
         try
         {
             using var doc=JsonDocument.Parse(e.WebMessageAsJson); var r=doc.RootElement; string? type=r.GetProperty("type").GetString();
+            if(dashboardOwner!=null && type!="ready") return;
             switch(type)
             {
-                case "ready": ready=true; SendConfiguration(); break;
+                case "ready": ready=true; SendConfiguration(); if(dashboardOwner?.lastSnapshot is { } snapshot) ReceiveSnapshot(snapshot); break;
+                case "startScreenSaver": screenSaver?.Start(); break;
+                case "stopScreenSaver": screenSaver?.Stop(); break;
                 case "saveSettings":
                     var previous=settings;
                     settings=DashboardSettings.Validate(r.GetProperty("settings").Deserialize<DashboardSettings>(AppFiles.Json)??settings);
@@ -99,9 +132,17 @@ public partial class MainWindow : Window
         }
         catch(Exception ex) { AppFiles.Log("Bedienung: "+ex.GetType().Name); Send(new {type="notice",message="Einstellung konnte nicht übernommen werden."}); }
     }
-    public static List<DisplayInfo> GetDisplays()=>Forms.Screen.AllScreens.Select(s=>new DisplayInfo(s.DeviceName,$"{s.DeviceName.Replace(@"\\.\","")} · {s.Bounds.Width} × {s.Bounds.Height}",s.Bounds.Width,s.Bounds.Height,s.Bounds.X,s.Bounds.Y,s.Primary)).ToList();
+    public static List<DisplayInfo> GetDisplays()=>Forms.Screen.AllScreens.Select(s=>new DisplayInfo(s.DeviceName,$"Bildschirm {s.DeviceName.Replace(@"\\.\DISPLAY","")} · {s.Bounds.Width} × {s.Bounds.Height} · {(s.Bounds.Height>s.Bounds.Width?"Hochformat":"Querformat")}{(s.Primary?" · Hauptbildschirm":"")}",s.Bounds.Width,s.Bounds.Height,s.Bounds.X,s.Bounds.Y,s.Primary)).ToList();
     private void ApplyDisplay()
     {
+        if(screenSaverDisplay is { } display)
+        {
+            WindowState=WindowState.Normal; WindowStyle=WindowStyle.None; ResizeMode=ResizeMode.NoResize;
+            MinWidth=0; MinHeight=0; Topmost=true;
+            var handle=new WindowInteropHelper(this).Handle;
+            if(handle!=IntPtr.Zero) SetWindowPos(handle,IntPtr.Zero,display.X,display.Y,display.Width,display.Height,0x0004|0x0010);
+            return;
+        }
         var displays=GetDisplays(); var selected=displays.FirstOrDefault(d=>d.Id==settings.DisplayId)??displays.OrderBy(d=>(long)d.Width*d.Height).First(); settings.DisplayId=selected.Id;
         WindowState=WindowState.Normal; WindowStyle=settings.Fullscreen?WindowStyle.None:WindowStyle.SingleBorderWindow; ResizeMode=settings.Fullscreen?ResizeMode.NoResize:ResizeMode.CanResize;
         Topmost=settings.AlwaysOnTop;
@@ -141,6 +182,11 @@ public partial class MainWindow : Window
         }
         catch(Exception e) { AppFiles.Log("Claude-Kontextanbindung: "+e.GetType().Name); }
     }
-    private void OnClosed(object? sender,EventArgs e) { stop.Cancel(); videoServer.Dispose(); hardware.Dispose(); ai.Dispose(); tray.Dispose(); Browser.Dispose(); }
+    private void OnClosed(object? sender,EventArgs e)
+    {
+        IsClosed=true; ready=false; stop.Cancel(); screenSaver?.Dispose();
+        if(dashboardOwner==null) { videoServer.Dispose(); hardware.Dispose(); ai.Dispose(); }
+        tray.Dispose(); Browser.Dispose();
+    }
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
 }

@@ -9,7 +9,7 @@
 
 Windows dashboard for a small HDMI monitor inside a PC. Displays hardware telemetry, Claude and Codex account usage, credit balances when available, and chat context measurements over a local video or YouTube background. Development version **1.0.3**. The host uses C# / .NET 10 and WPF; the interface uses TypeScript in WebView2. The user interface is German; source comments, tests, build messages, and documentation are English.
 
-**Project status:** The Windows build, all 34 data/protocol checks, and all 10 interface tests pass. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
+**Project status:** The Windows build, all 44 data/protocol checks, and all 14 interface tests pass. The screensaver was verified on five connected monitors with mixed resolutions and orientations, including advancing video frames on the portrait monitor, dashboard selection, background-only mode, and joint dismissal. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
 
 ## Features
 
@@ -20,6 +20,7 @@ Windows dashboard for a small HDMI monitor inside a PC. Displays hardware teleme
 - Larger account/storage text and storage percentages with two decimal places using German number formatting, such as `72,34 %`.
 - Looping local MP4/WebM backgrounds and an embedded YouTube player with playback, volume, and mute controls.
 - Monitor selection, fullscreen, tray controls, optional Windows autostart, and automatically saved accent/text colors, card opacity, and background dimming.
+- An in-app screensaver on every connected monitor, with manual start and an optional inactivity timer in the toolbar.
 
 Hardware access is read-only. The app does not change pump speeds, fan curves, or cooling-controller settings.
 
@@ -40,6 +41,12 @@ The current hardware adapters require an Aqua Computer OCTO, Aquasuite, and an N
 For a desktop icon, run `./Create-DesktopShortcut.ps1` after publishing. It creates **PC AI Dashboard** on your Windows desktop with a custom icon and launches the EXE directly, without a command window. Re-run the script if you move the repository. Keep the EXE and its accompanying files in `artifacts/app`.
 
 The smallest monitor is selected on first startup. The 1024 × 600 layout scales proportionally. **F11** toggles fullscreen; **Esc** switches to windowed mode. The tray menu reopens the dashboard, shows settings, or exits.
+
+The toolbar's **▣ Starten** button starts the screensaver on all connected monitors, even with **Timer: aus**. **Timer: an** enables automatic start after the adjacent **Min.** value (1–240 minutes) without mouse or keyboard input anywhere in your Windows session. The timer defaults to off and a ten-minute wait; both choices are saved. Mouse movement, clicking, or a key press dismisses all screensaver windows together and restores the normal dashboard if it was visible. A short launch grace period ignores the mouse release from the start button. Changing the monitor setup also dismisses the screensaver.
+
+The adjacent **▤** button opens **Einstellungen → Bildschirmschoner** directly. Check the monitors that should show dashboard cards over the video. Unchecked monitors still run the screensaver with only the video, without cards or dimming. **Dashboard überall** follows all connected monitors, including newly connected ones; **Überall nur Video** hides the dashboard on all monitors. This choice is saved independently of the normal app's display and applies to both manual and timed starts. Local video stretches to fill each monitor, including portrait displays.
+
+The normal app must remain running for these controls and the timer. This mode does not register a Windows `.scr` file or change Windows lock, sleep, or display-off settings. Screensaver windows share the normal app's sensor/account snapshots and video server. They play the selected visual background silently; music continues through the normal app, so audio is not multiplied across monitors.
 
 ## Download
 

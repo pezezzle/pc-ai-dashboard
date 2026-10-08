@@ -63,6 +63,19 @@ static class Checks
         Assert(s.TextColor=="#ecf3f6", "Invalid text color falls back to readable default");
         Assert(new DashboardSettings().TemperatureScaleMax==100 && DashboardSettings.Validate(new(){TemperatureScaleMax=0}).TemperatureScaleMax==40,"Temperature scale has an explicit degree-based default and validated bounds");
         var saved=JsonSerializer.Serialize(new DashboardSettings { Accent="#ff00ff", TextColor="#eecc88" },AppFiles.Json);
+        var saverDefaults=JsonSerializer.Deserialize<DashboardSettings>("{}",AppFiles.Json)!;
+        Assert(!saverDefaults.ScreenSaverTimerEnabled && saverDefaults.ScreenSaverIdleMinutes==10,"Existing settings keep the screensaver timer disabled with a ten-minute default");
+        Assert(DashboardSettings.Validate(new(){ScreenSaverIdleMinutes=0}).ScreenSaverIdleMinutes==1 && DashboardSettings.Validate(new(){ScreenSaverIdleMinutes=999}).ScreenSaverIdleMinutes==240,"Screensaver wait time is bounded between one minute and four hours");
+        var saverSettings=JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(new DashboardSettings { ScreenSaverTimerEnabled=true,ScreenSaverIdleMinutes=37 },AppFiles.Json),AppFiles.Json)!;
+        Assert(saverSettings.ScreenSaverTimerEnabled && saverSettings.ScreenSaverIdleMinutes==37,"Screensaver timer state and wait time survive restart serialization");
+        Assert(saverDefaults.ScreenSaverDashboardDisplayIds==null && ScreenSaverController.ShowsDashboard("screen3",null),"Existing settings show dashboard cards on every screensaver monitor");
+        Assert(ScreenSaverController.ShowsDashboard("SCREEN3",["screen3"]) && !ScreenSaverController.ShowsDashboard("screen1",["screen3"]) && !ScreenSaverController.ShowsDashboard("screen1",[]),"Explicit dashboard selections are case-insensitive; unselected monitors show only the background");
+        var displaySelection=DashboardSettings.Validate(new(){ScreenSaverDashboardDisplayIds=["screen3","SCREEN3","", "screen1"]});
+        var displayRestored=JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(displaySelection,AppFiles.Json),AppFiles.Json)!;
+        Assert(displayRestored.ScreenSaverDashboardDisplayIds!.SequenceEqual(new[]{"screen3","screen1"}) && DashboardSettings.Validate(new(){ScreenSaverDashboardDisplayIds=[]}).ScreenSaverDashboardDisplayIds!.Count==0,"Dashboard monitor selection is cleaned, persisted, and preserves the all-video option");
+        Assert(!ScreenSaverController.ShouldStart(false,1,60000,0,60000) && !ScreenSaverController.ShouldStart(true,1,60000,59000,60000),"Disabled timers and recent input anywhere in the session prevent automatic start");
+        Assert(ScreenSaverController.ShouldStart(true,1,60000,0,60000) && !ScreenSaverController.ShouldStart(true,1,60000,0,1000),"An idle session starts at the threshold; dismissal prevents immediate re-entry");
+        Assert(ScreenSaverController.ShouldStart(true,1,30000,uint.MaxValue-30000,60000),"Idle detection handles Windows tick counter wraparound");
         var restored=JsonSerializer.Deserialize<DashboardSettings>(saved,AppFiles.Json)!;
         Assert(restored.Accent=="#ff00ff" && restored.TextColor=="#eecc88", "Both colors survive settings serialization");
         const long large=7_430_854_813;
@@ -70,6 +83,7 @@ static class Checks
         Assert(LocalVideoServer.TryRange("bytes=-32",large,out start,out end) && start==large-32 && end==large-1,"Suffix media range can read the end of a large MP4");
         Assert(!LocalVideoServer.TryRange("bytes=99999999999999999999-",large,out _,out _) && !LocalVideoServer.TryRange("bytes=5-2",large,out _,out _),"Overflow and backwards media ranges are rejected");
         CheckMediaHttp(Assert).GetAwaiter().GetResult();
+        CheckConcurrentMedia(Assert).GetAwaiter().GetResult();
         Console.WriteLine($"{count} checks passed."); return 0;
     }
     private static async Task CheckMediaHttp(Action<bool,string> Assert)
@@ -94,5 +108,39 @@ static class Checks
             using var unknown=await http.GetAsync(new Uri(new Uri(server.Url),"/unknown"));
             Assert(denied.StatusCode==System.Net.HttpStatusCode.Forbidden && unknown.StatusCode==System.Net.HttpStatusCode.NotFound,"Foreign origins and unknown paths cannot read the selected video");
         }finally {System.IO.File.Delete(fixture);}
+    }
+
+    private static async Task CheckConcurrentMedia(Action<bool,string> Assert)
+    {
+        var fixture=System.IO.Path.GetTempFileName();
+        var clients=new List<System.Net.Sockets.TcpClient>();
+        try
+        {
+            // Hold responses open without consuming the bodies, like buffered video players.
+            // A four-slot server blocks the fifth/sixth player, even when CSS is correct.
+            using(var file=System.IO.File.OpenWrite(fixture)) file.SetLength(32*1024*1024);
+            using var server=new LocalVideoServer("https://pc-ai-dashboard.local"); server.Configure(fixture);
+            var uri=new Uri(server.Url);
+            using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            for(int i=0;i<6;i++)
+            {
+                var client=new System.Net.Sockets.TcpClient { ReceiveBufferSize=1024 }; clients.Add(client);
+                await client.ConnectAsync(uri.Host,uri.Port,deadline.Token);
+                var stream=client.GetStream();
+                var request=System.Text.Encoding.ASCII.GetBytes($"GET {uri.PathAndQuery} HTTP/1.1\r\nHost: {uri.Host}\r\nRange: bytes=0-\r\n\r\n");
+                await stream.WriteAsync(request,deadline.Token);
+                uint tail=0; var single=new byte[1]; var header=new System.Text.StringBuilder();
+                while(tail!=0x0d0a0d0a && header.Length<16384)
+                {
+                    if(await stream.ReadAsync(single,deadline.Token)==0) throw new Exception("Video response ended before its header");
+                    header.Append((char)single[0]); tail=(tail<<8)|single[0];
+                }
+                if(!header.ToString().StartsWith("HTTP/1.1 206")) throw new Exception("Concurrent video stream was not accepted");
+            }
+            using var http=new HttpClient { Timeout=TimeSpan.FromSeconds(5) };
+            using var head=await http.SendAsync(new HttpRequestMessage(HttpMethod.Head,server.Url),deadline.Token);
+            Assert(head.IsSuccessStatusCode && head.Content.Headers.ContentLength==32*1024*1024,"Normal app plus five concurrent buffered video streams leave room for metadata/seek requests");
+        }
+        finally { foreach(var client in clients) client.Dispose(); System.IO.File.Delete(fixture); }
     }
 }

@@ -2,6 +2,91 @@ const { test, expect } = require('@playwright/test');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const settings = { displayId:'test', fullscreen:true, alwaysOnTop:true, autostart:false, startAquasuite:true, backgroundMode:'gradient',youtubeUrl:'',localVideoPath:'',muted:true,volume:25,dim:.5,cardOpacity:.76,accent:'#66e7c8',aquasuiteSharedMemory:'PC-AI-Dashboard',aquasuiteXmlPath:'',pumpChannel:4,topChannel:3,sideChannel:0,bottomChannel:1,backChannel:2,pumpTempChannel:0,radiatorTempChannel:2,caseTempChannel:3,codexSessionId:'',claudeSessionId:'' };
+
+test('screensaver manual start, persisted timer controls and invalid wait time',async ({page})=> {
+  await page.addInitScript(()=> {
+    window.sentMessages=[];
+    window.chrome={webview:{postMessage:data=>window.sentMessages.push(data),addEventListener:()=>{}}};
+  });
+  await page.reload();
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[]}),settings);
+  await expect(page.locator('#screensaver-timer')).toHaveAttribute('aria-pressed','false');
+  await expect(page.locator('#screensaver-minutes')).toHaveValue('10');
+  await page.locator('#screensaver-start').click();
+  expect(await page.evaluate(()=>window.sentMessages.filter(m=>m.type==='startScreenSaver').length)).toBe(1);
+  await page.locator('#screensaver-minutes').fill('3');
+  await page.locator('#screensaver-minutes').dispatchEvent('change');
+  await page.locator('#screensaver-timer').click();
+  await expect(page.locator('#screensaver-timer')).toHaveText('Timer: an');
+  const saved=await page.evaluate(()=>window.sentMessages.filter(m=>m.type==='saveSettings').at(-1).settings);
+  expect(saved.screenSaverTimerEnabled).toBe(true);expect(saved.screenSaverIdleMinutes).toBe(3);expect(saved.muted).toBe(true);
+  await page.reload();await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[]}),saved);
+  await expect(page.locator('#screensaver-timer')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#screensaver-minutes')).toHaveValue('3');
+  await page.locator('#screensaver-minutes').fill('0');await page.locator('#screensaver-minutes').dispatchEvent('change');
+  await expect(page.locator('#notice')).toContainText('zwischen 1 und 240');
+  await expect(page.locator('#screensaver-minutes')).toHaveValue('3');
+  await page.locator('#screensaver-minutes').fill('');await page.locator('#screensaver-minutes').dispatchEvent('change');
+  await expect(page.locator('#screensaver-minutes')).toHaveValue('3');
+  await page.locator('#screensaver-timer').click();
+  expect(await page.evaluate(()=>window.sentMessages.filter(m=>m.type==='saveSettings').at(-1).settings.screenSaverTimerEnabled)).toBe(false);
+});
+
+test('screensaver toolbar fits and display mode hides controls without hiding live cards',async ({page})=> {
+  const layout=await page.evaluate(()=> {
+    const header=document.querySelector('header').getBoundingClientRect();
+    const children=[...document.querySelector('header').children].filter(e=>getComputedStyle(e).display!=='none').map(e=>e.getBoundingClientRect());
+    return {overflow:document.querySelector('header').scrollWidth>document.querySelector('header').clientWidth,
+      inside:children.every(r=>r.left>=header.left&&r.right<=header.right+1),
+      overlap:children.some((r,i)=>i>0&&r.left<children[i-1].right-1)};
+  });
+  expect(layout).toEqual({overflow:false,inside:true,overlap:false});
+  await page.screenshot({path:'artifacts/screensaver-toolbar-preview.png'});
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[],screenSaver:true}),settings);
+  await expect(page.locator('.toolbar')).not.toBeVisible();
+  await expect(page.locator('#cpu-card')).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('cursor','none');
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[],screenSaver:false}),settings);
+  await expect(page.locator('.toolbar')).toBeVisible();
+});
+
+test('dashboard monitor checkboxes save independently of the normal app display',async ({page})=> {
+  const displays=[{id:'screen1',label:'Bildschirm 1 · Querformat'},{id:'screen3',label:'Bildschirm 3 · Hochformat'},{id:'screen5',label:'Bildschirm 5 · Querformat'}];
+  await page.evaluate(({s,displays})=>window.dashboardTest.applyConfiguration({settings:s,displays}),{s:settings,displays});
+  await page.locator('#screensaver-config').click();
+  await expect(page.locator('#screensaver-displays input:checked')).toHaveCount(3);
+  await page.locator('#screensaver-displays [data-display-id="screen1"]').uncheck();
+  await page.locator('#screensaver-displays [data-display-id="screen5"]').uncheck();
+  const saved=await page.evaluate(()=>window.dashboardTest.getSettings());
+  expect(saved.screenSaverDashboardDisplayIds).toEqual(['screen3']);expect(saved.displayId).toBe('test');
+  await expect(page.locator('#screensaver-selection-status')).toHaveText('Dashboard: 1 Bildschirm · Nur Hintergrundvideo: 2');
+  await page.reload();
+  await page.evaluate(({s,displays})=>window.dashboardTest.applyConfiguration({settings:s,displays}),{s:saved,displays});
+  await page.locator('#settings-button').click();
+  await expect(page.locator('#screensaver-displays [data-display-id="screen3"]')).toBeChecked();
+  await expect(page.locator('#screensaver-displays [data-display-id="screen1"]')).not.toBeChecked();
+  await page.locator('#screensaver-settings').scrollIntoViewIfNeeded();
+  await page.screenshot({path:'artifacts/screensaver-selection-preview.png'});
+  await page.locator('#screensaver-none').click();
+  expect(await page.evaluate(()=>window.dashboardTest.getSettings().screenSaverDashboardDisplayIds)).toEqual([]);
+  await expect(page.locator('#screensaver-selection-status')).toHaveText('Dashboard: 0 Bildschirme · Nur Hintergrundvideo: 3');
+  await page.locator('#screensaver-all').click();
+  expect(await page.evaluate(()=>window.dashboardTest.getSettings().screenSaverDashboardDisplayIds)).toBe(null);
+  await expect(page.locator('#screensaver-displays input:checked')).toHaveCount(3);
+});
+
+test('portrait video fills the viewport and dashboard selection affects only saver mode',async ({page})=> {
+  await page.setViewportSize({width:600,height:1000});
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:{...s,screenSaverDashboardDisplayIds:[]},displays:[],screenSaver:true,showDashboard:false,displayId:'portrait'}),settings);
+  await expect(page.locator('#stage')).not.toBeVisible();
+  await expect(page.locator('#shade')).not.toBeVisible();
+  await expect(page.locator('#local-video')).toHaveCSS('object-fit','fill');
+  const dimensions=await page.locator('#background').boundingBox();expect(dimensions.width).toBe(600);expect(dimensions.height).toBe(1000);
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:s,displays:[],screenSaver:true,showDashboard:true}),settings);
+  await expect(page.locator('#stage')).toBeVisible();await expect(page.locator('#shade')).toBeVisible();
+  await page.evaluate(s=>window.dashboardTest.applyConfiguration({settings:{...s,screenSaverDashboardDisplayIds:[]},displays:[],screenSaver:false,showDashboard:false}),settings);
+  await expect(page.locator('#stage')).toBeVisible();await expect(page.locator('.toolbar')).toBeVisible();
+});
 test.beforeEach(async ({ page }) => {
   await page.goto(pathToFileURL(path.resolve('src/PcAiDashboard/Web/index.html')).href);
   await page.evaluate(s => window.dashboardTest.applyConfiguration({settings:s,displays:[{id:'test',label:'Test · 1024 × 600'}]}),settings);
