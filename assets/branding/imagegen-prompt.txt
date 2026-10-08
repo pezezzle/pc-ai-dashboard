@@ -1,0 +1,5 @@
+Generated with the built-in Imagegen tool for the PC / AI Dashboard desktop shortcut.
+
+Use case: logo-brand. Asset type: a single square Windows desktop application icon for PC / AI Dashboard, a personal dark-themed hardware telemetry and AI usage dashboard. Primary request: design a cool polished iconic logo: a bold microchip silhouette merging with a simple luminous dashboard gauge and three strong telemetry bars, hinting at artificial intelligence. Deep navy rounded-square tile, electric cyan and subtle violet luminous accents, restrained premium futuristic appearance. Centered, large clean silhouette, generous outer transparent margin, high contrast, crisp edges readable at 32 pixels. Slight dimensional polish, minimal details, no tiny circuitry. No text, letters, wordmarks, watermark, mockup, shadows outside the tile, or extra icons. Produce the actual standalone icon artwork with a transparent background around the rounded tile.
+
+The PNG is the original generated artwork. The ICO is a format conversion with 16, 24, 32, 48, 64, 128, and 256 pixel sizes for Windows.

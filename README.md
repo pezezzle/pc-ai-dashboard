@@ -37,6 +37,8 @@ The current hardware adapters require an Aqua Computer OCTO, Aquasuite, and an N
 3. Run `Start-App.cmd` or `artifacts/app/PcAiDashboard.exe`.
 4. Open **Einstellungen** using the gear button to choose the monitor, sensor channels, background, and appearance.
 
+For a desktop icon, run `./Create-DesktopShortcut.ps1` after publishing. It creates **PC AI Dashboard** on your Windows desktop with a custom icon and launches the EXE directly, without a command window. Re-run the script if you move the repository. Keep the EXE and its accompanying files in `artifacts/app`.
+
 The smallest monitor is selected on first startup. The 1024 × 600 layout scales proportionally. **F11** toggles fullscreen; **Esc** switches to windowed mode. The tray menu reopens the dashboard, shows settings, or exits.
 
 ## Download
