@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="192 192 640 640">
+  <title>AI Dashboard menu symbol</title>
+  <rect x="248" y="260" width="528" height="504" rx="64" fill="none" stroke="#000" stroke-width="42"/>
+  <rect x="326" y="338" width="152" height="24" rx="12"/>
+  <circle cx="690" cy="350" r="12"/>
+  <rect x="334" y="530" width="76" height="150" rx="16"/>
+  <rect x="474" y="434" width="76" height="246" rx="16"/>
+  <rect x="614" y="486" width="76" height="194" rx="16"/>
+</svg>

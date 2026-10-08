@@ -4,7 +4,7 @@
     "module": "none",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
-    "outDir": "src/PcAiDashboard/Web",
+    "outDir": "ui/web",
     "removeComments": true,
     "skipLibCheck": true
   },

@@ -1,7 +1,10 @@
 "use strict";
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-const bridge = window.chrome?.webview;
+const bridge = window.dashboardBridge ?? window.chrome?.webview;
+let nativeVideo = false;
+let nativePlaybackError = false;
+let platform = 'windows';
 let settings = { backgroundMode: 'gradient', youtubeUrl: '', localVideoPath: '', muted: true, volume: 25, dim: .5, cardOpacity: .76, accent: '#66e7c8', textColor: '#ecf3f6', fullscreen: true, displayId: '', codexSessionId: '', claudeSessionId: '', screenSaverTimerEnabled: false, screenSaverIdleMinutes: 10, screenSaverDashboardDisplayIds: null };
 let availableDisplays = [];
 let latest = null;
@@ -21,7 +24,18 @@ const text = (selector, value) => { $(selector).textContent = value; };
 function element(tag, className, value) { const el = document.createElement(tag); el.className = className; if (value !== undefined)
     el.textContent = value; return el; }
 function showNotice(message) { text('#notice', message); $('#notice').style.display = 'block'; clearTimeout(noticeTimer); noticeTimer = window.setTimeout(() => { $('#notice').style.display = 'none'; }, 5500); }
-function scale() { const s = Math.min(innerWidth / 1024, innerHeight / 600); $('#stage').style.transform = `scale(${s})`; $('#stage').style.left = `${(innerWidth - 1024 * s) / 2}px`; $('#stage').style.top = `${(innerHeight - 600 * s) / 2}px`; }
+function scale() {
+    if (document.body.classList.contains('notebook')) {
+        $('#stage').style.transform = '';
+        $('#stage').style.left = '';
+        $('#stage').style.top = '';
+        return;
+    }
+    const s = Math.min(innerWidth / 1024, innerHeight / 600);
+    $('#stage').style.transform = `scale(${s})`;
+    $('#stage').style.left = `${(innerWidth - 1024 * s) / 2}px`;
+    $('#stage').style.top = `${(innerHeight - 600 * s) / 2}px`;
+}
 addEventListener('resize', scale);
 scale();
 function clock() { text('#clock', new Date().toLocaleTimeString('de-DE')); if (latest)
@@ -44,6 +58,20 @@ function bar(value) { const track = element('div', 'track'); const fill = elemen
 function render(data) {
     latest = data;
     const map = new Map(data.metrics.map(m => [m.id, m]));
+    if (data.capabilities?.platform === 'macos') {
+        $('.cooling').hidden = true;
+        $('.fans').hidden = true;
+        const system = $('#mac-system');
+        system.hidden = false;
+        system.replaceChildren();
+        for (const metric of data.metrics.filter(m => m.id === 'batteryLoad' || m.id === 'memoryPressure' || m.unit === 'RPM')) {
+            const card = element('article', 'card');
+            card.append(element('span', 'eyebrow', metric.id === 'memoryPressure' ? 'SPEICHERDRUCK' : metric.label));
+            const value = metric.id === 'memoryPressure' ? ({ 1: 'Normal', 2: 'Erhöht', 4: 'Kritisch' }[metric.value ?? 0] ?? '—') : `${fmt(metric.value)} ${metric.unit}`;
+            card.append(element('strong', '', value));
+            system.append(card);
+        }
+    }
     $$('[data-metric]').forEach(el => { const metric = map.get(el.dataset.metric); const value = metric?.value; el.textContent = fmt(value, metric?.unit === '°C' || el.dataset.metric === 'ramUsed' ? 1 : 0); el.classList.toggle('unavailable', value == null); el.classList.toggle('hot', metric?.unit === '°C' && (value ?? 0) > (metric.id.startsWith('coolant') ? 50 : 85)); el.title = metric ? `${metric.label} · ${metric.source} · ${age(metric.updatedAt)}` : 'Kein Messwert'; });
     $$('[data-bar]').forEach(el => { el.style.width = `${Math.min(100, Math.max(0, map.get(el.dataset.bar)?.value ?? 0))}%`; });
     updateTemperatureBars(map);
@@ -182,16 +210,30 @@ function renderCredits(card, provider) {
     container.title = `${credit?.detail ?? detail} · Aktualisierung alle 60 Sekunden · ${age(provider.updatedAt)}`;
 }
 function applyConfiguration(config) {
+    nativeVideo = config.nativeVideo === true;
+    document.body.classList.toggle('native-video', nativeVideo && config.settings.backgroundMode === 'local' && !!config.settings.localVideoPath);
+    platform = config.platform ?? 'windows';
+    document.body.dataset.platform = platform;
     settings = { ...config.settings, textColor: config.settings.textColor ?? '#ecf3f6', temperatureScaleMax: config.settings.temperatureScaleMax ?? 100, screenSaverTimerEnabled: config.settings.screenSaverTimerEnabled ?? false, screenSaverIdleMinutes: config.settings.screenSaverIdleMinutes ?? 10, screenSaverDashboardDisplayIds: config.settings.screenSaverDashboardDisplayIds ?? null };
     availableDisplays = config.displays;
     document.body.classList.toggle('screensaver', config.screenSaver === true);
     document.body.classList.toggle('screensaver-video-only', config.screenSaver === true && config.showDashboard === false);
+    document.body.classList.toggle('notebook', settings.profile === 'notebook' && config.screenSaver !== true);
+    scale();
+    if (platform === 'macos') {
+        text('#cpu-card .eyebrow .muted', 'SENSOREN / TOTAL');
+        text('#gpu-card .eyebrow .muted', 'SENSOREN / TOTAL');
+        text('#settings-status', 'Einstellungen bleiben auf diesem Mac.');
+    }
+    $$('[data-platform="windows"]').forEach(el => { el.hidden = platform === 'macos'; });
+    $$('[data-platform="macos"]').forEach(el => { el.hidden = platform !== 'macos'; });
+    if (platform === 'macos')
+        settings.keepDashboardInBackground = config.settings.keepDashboardInBackground ?? false;
     document.body.dataset.displayId = config.displayId ?? '';
     updateScreenSaverControls();
     localMediaUrl = config.mediaUrl ?? '';
     applyAppearance();
-    $('#mute').textContent = settings.muted ? '◌' : '♫';
-    $('#mute').title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
+    updateMuteButton();
     $('#volume').value = String(settings.volume);
     const displays = $('#display-select');
     displays.replaceChildren();
@@ -252,7 +294,9 @@ $('#screensaver-all').onclick = () => { settings.screenSaverDashboardDisplayIds 
 $('#screensaver-none').onclick = () => { settings.screenSaverDashboardDisplayIds = []; updateScreenSaverDisplays(); save(); };
 function updateScreenSaverControls() {
     const toggle = $('#screensaver-timer');
-    toggle.textContent = settings.screenSaverTimerEnabled ? 'Timer: an' : 'Timer: aus';
+    const label = settings.screenSaverTimerEnabled ? 'Timer: an' : 'Timer: aus';
+    if (toggle.textContent !== label)
+        toggle.textContent = label;
     toggle.setAttribute('aria-pressed', String(settings.screenSaverTimerEnabled));
     toggle.title = settings.screenSaverTimerEnabled ? `Aktiv: nach ${settings.screenSaverIdleMinutes} Min. ohne Eingabe · Klicken zum Ausschalten` : 'Automatischen Bildschirmschoner einschalten';
     $('#screensaver-minutes').value = String(settings.screenSaverIdleMinutes);
@@ -313,11 +357,15 @@ for (const name of ['pumpChannel', 'topChannel', 'sideChannel', 'bottomChannel',
         select.add(new Option('Kanal ' + (i + 1), String(i)));
 }
 $$('.session-select').forEach(select => { select.onchange = () => { const name = select.closest('article').id.startsWith('codex') ? 'codex' : 'claude'; settings[name + 'SessionId'] = select.value; save(); }; });
-$('#fullscreen').onclick = () => send(settings.fullscreen ? 'windowed' : 'fullscreen');
+$('#fullscreen').onclick = () => send(platform === 'macos' ? 'toggleFullscreen' : settings.fullscreen ? 'windowed' : 'fullscreen');
+$('#keep-dashboard-background').onchange = event => { settings.keepDashboardInBackground = event.target.checked; save(); };
 $('#mute').onclick = () => { settings.muted = !settings.muted; applyAudio(); save(); };
 $('#volume').oninput = event => { settings.volume = Number(event.target.value); applyAudio(); };
 $('#volume').onchange = save;
-$('#play').onclick = () => { if (settings.backgroundMode === 'local') {
+$('#play').onclick = () => { if (nativeVideo && settings.backgroundMode === 'local') {
+    send('videoToggle');
+    return;
+} if (settings.backgroundMode === 'local') {
     if (video.paused)
         void video.play().catch(() => showNotice('Video bitte über den Player starten.'));
     else
@@ -331,7 +379,7 @@ else if (player && youtubeReady) {
 }
 else
     showNotice('Wähle zuerst ein Video in den Einstellungen.'); };
-function cinema(on) { document.body.classList.toggle('cinema', on); $('#leave-cinema').hidden = !on; video.controls = on; }
+function cinema(on) { document.body.classList.toggle('cinema', on); $('#leave-cinema').hidden = !on; video.controls = on; $('#native-player-controls').hidden = !(on && nativeVideo && settings.backgroundMode === 'local'); }
 $('#cinema').onclick = () => cinema(true);
 $('#leave-cinema').onclick = () => cinema(false);
 addEventListener('keydown', event => { if (event.key === 'Escape')
@@ -339,8 +387,37 @@ addEventListener('keydown', event => { if (event.key === 'Escape')
 video.addEventListener('play', () => setPlaying(true));
 video.addEventListener('pause', () => setPlaying(false));
 video.addEventListener('error', () => { text('#media-state', 'Video konnte nicht geladen werden'); showNotice('Die Videodatei oder das Format konnte nicht geladen werden.'); });
-function setPlaying(value) { playing = value; $('#play').textContent = playing ? 'Ⅱ' : '▶'; }
-function applyAudio() { video.muted = settings.muted; video.volume = settings.volume / 100; if (player && youtubeReady) {
+function buttonIcon(button, icon, paths) {
+    if (button.dataset.icon === icon)
+        return;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [name, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }))
+        svg.setAttribute(name, value);
+    for (const d of paths) {
+        const path = document.createElementNS(svg.namespaceURI, 'path');
+        path.setAttribute('d', d);
+        svg.append(path);
+    }
+    button.replaceChildren(svg);
+    button.dataset.icon = icon;
+}
+function updateMuteButton() {
+    const button = $('#mute');
+    const speaker = 'M11 5 6 9H3v6h3l5 4V5Z';
+    buttonIcon(button, settings.muted ? 'volume-off' : 'volume-on', settings.muted ? [speaker, 'M16 9l5 6M21 9l-5 6'] : [speaker, 'M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14']);
+    button.title = settings.muted ? 'Ton einschalten' : 'Ton ausschalten';
+    button.setAttribute('aria-label', button.title);
+    button.setAttribute('aria-pressed', String(settings.muted));
+}
+function setPlaying(value) {
+    playing = value;
+    const button = $('#play');
+    buttonIcon(button, playing ? 'pause' : 'play', playing ? ['M8 5v14M16 5v14'] : ['M7 4v16l13-8L7 4Z']);
+    button.title = playing ? 'Video pausieren' : 'Video starten';
+    button.setAttribute('aria-label', button.title);
+}
+function applyAudio() { updateMuteButton(); if (nativeVideo && settings.backgroundMode === 'local')
+    send('videoAudio', { muted: settings.muted, volume: settings.volume }); video.muted = settings.muted; video.volume = settings.volume / 100; if (player && youtubeReady) {
     player.setVolume(settings.volume);
     if (settings.muted)
         player.mute();
@@ -366,7 +443,7 @@ function youtubeId(value) {
     }
 }
 function applyBackground() {
-    const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}|${localMediaUrl}`;
+    const signature = `${settings.backgroundMode}|${settings.youtubeUrl}|${settings.localVideoPath}|${localMediaUrl}|${nativeVideo}`;
     if (signature === mediaSignature)
         return;
     mediaSignature = signature;
@@ -385,7 +462,10 @@ function applyBackground() {
         $('#background').prepend(mount);
     }
     mount.replaceChildren();
-    if (settings.backgroundMode === 'local' && settings.localVideoPath && localMediaUrl) {
+    if (nativeVideo && settings.backgroundMode === 'local' && settings.localVideoPath) {
+        text('#media-state', 'LOKALES VIDEO');
+    }
+    else if (settings.backgroundMode === 'local' && settings.localVideoPath && localMediaUrl) {
         video.src = localMediaUrl;
         video.style.display = 'block';
         applyAudio();
@@ -429,10 +509,34 @@ function createYoutube(id) {
             onError: (event) => { text('#media-state', 'YOUTUBE · FEHLER ' + event.data); showNotice(event.data === 101 || event.data === 150 ? 'Dieses Video erlaubt keine Einbettung. Bitte ein anderes auswählen.' : 'YouTube-Wiedergabe nicht verfügbar (Fehler ' + event.data + ').'); }
         } });
 }
+function renderPlayback(data) {
+    if (!nativeVideo || settings.backgroundMode !== 'local')
+        return;
+    setPlaying(data.paused === false);
+    text('#native-video-play', data.paused === false ? 'Pause' : 'Abspielen');
+    const position = $('#native-video-position');
+    const duration = Number(data.duration) || 0, current = Number(data.time) || 0;
+    position.max = String(duration);
+    position.disabled = duration <= 0;
+    if (!position.matches(':active'))
+        position.value = String(current);
+    const stamp = (seconds) => { const value = Math.floor(seconds); return `${Math.floor(value / 3600)}:${String(Math.floor(value / 60) % 60).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
+    text('#native-video-time', `${stamp(current)} / ${stamp(duration)}`);
+    const failed = Number(data.error) > 0;
+    if (failed && !nativePlaybackError) {
+        text('#media-state', 'Video konnte nicht geladen werden');
+        showNotice('Die Videodatei oder das Format konnte nicht geladen werden.');
+    }
+    nativePlaybackError = failed;
+}
+$('#native-video-play').onclick = () => send('videoToggle');
+$('#native-video-position').onchange = event => send('videoSeek', { seconds: event.target.valueAsNumber });
 bridge?.addEventListener('message', event => { const data = event.data; if (data.type === 'snapshot')
     render(data.data);
 else if (data.type === 'configuration')
     applyConfiguration(data);
+else if (data.type === 'playback')
+    renderPlayback(data);
 else if (data.type === 'notice')
     showNotice(String(data.message)); });
 window.dashboardTest = { applyConfiguration, render, getSettings: () => settings };

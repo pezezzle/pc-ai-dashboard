@@ -1,4 +1,4 @@
-# PC / AI Dashboard · Windows
+# PC / AI Dashboard · Windows & macOS
 
 [![Windows build](https://github.com/pezezzle/pc-ai-dashboard/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/pezezzle/pc-ai-dashboard/actions/workflows/build.yml)
 [![Last commit](https://img.shields.io/github/last-commit/pezezzle/pc-ai-dashboard/main)](https://github.com/pezezzle/pc-ai-dashboard/commits/main)
@@ -7,9 +7,9 @@
 [![TypeScript 5.9](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4)](docs/SETUP.md)
 
-Windows dashboard for a small HDMI monitor inside a PC. Displays hardware telemetry, Claude and Codex account usage, credit balances when available, and chat context measurements over a local video or YouTube background. Development version **1.0.3**. The host uses C# / .NET 10 and WPF; the interface uses TypeScript in WebView2. The user interface is German; source comments, tests, build messages, and documentation are English.
+Dashboard for a dedicated Windows HDMI display and a macOS notebook menu bar. Displays hardware telemetry, Claude and Codex account usage, credit balances when available, and chat context measurements over a local video or YouTube background. Development version **1.1.0**. The shared core uses C# / .NET 10. Windows uses WPF/WebView2; macOS uses a native Swift/AppKit/SwiftUI menu bar and panels plus WKWebView for the shared TypeScript dashboard. The user interface is German; source comments, tests, build messages, and documentation are English.
 
-**Project status:** The Windows build, all 44 data/protocol checks, and all 14 interface tests pass. The screensaver was verified on five connected monitors with mixed resolutions and orientations, including advancing video frames on the portrait monitor, dashboard selection, background-only mode, and joint dismissal. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
+**Project status:** The portable core checks and Mac/Windows cross-builds pass. The Mac UI is checked in Chromium and WebKit; see [Mac notebook setup and validation](docs/MAC.md). The following Windows live checks describe the previously verified 1.0.3 environment: The screensaver was verified on five connected monitors with mixed resolutions and orientations, including advancing video frames on the portrait monitor, dashboard selection, background-only mode, and joint dismissal. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
 
 ## Features
 
@@ -24,7 +24,29 @@ Windows dashboard for a small HDMI monitor inside a PC. Displays hardware teleme
 
 Hardware access is read-only. The app does not change pump speeds, fan curves, or cooling-controller settings.
 
-## Getting started
+## Mac notebook
+
+Build and start the native app on macOS 15 or newer, with Xcode, .NET 10 SDK and Node.js installed:
+
+```sh
+./Build-Mac.sh --verify
+open "artifacts/mac/AI Dashboard.app"
+```
+
+The app starts in the menu bar, without taking over a monitor. It shows consumed
+Codex/Claude usage and `↻1` when one manual Codex reset is available. A `?` after
+the reset count means the last known availability is stale. Five-hour windows are
+preferred; another available window is explicitly labeled, such as `7T` for a
+weekly limit. Clicking opens a native detail panel, with actions to pin it or open
+the larger responsive dashboard. Manual resets are **strictly display-only**;
+no reset action exists, and the outgoing account protocol rejects redemption.
+
+Mac CPU/GPU usage, readable temperature zones, RAM, memory pressure, battery and
+storage are read locally. Fanless notebooks omit fan cards. Claude Code and
+Claude Desktop OAuth credentials are read from their existing dedicated stores
+and macOS Keychain, never saved in dashboard settings. See [Mac setup](docs/MAC.md).
+
+## Windows getting started
 
 The current hardware adapters require an Aqua Computer OCTO, Aquasuite, and an NVIDIA GPU with `nvidia-smi`. Windows CPU, RAM, and drive readings do not depend on the OCTO. Unavailable readings remain visibly unavailable.
 

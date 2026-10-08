@@ -8,7 +8,9 @@ Open **Einstellungen → Video & Ton** and choose a background:
 |---|---|
 | `Ruhiger Farbverlauf` | Built-in gradient; no video or network connection |
 | `YouTube` | Official embedded player selected by URL or video ID |
-| `Lokales Video` | Selected MP4, M4V, or WebM streamed from its current location |
+| `Lokales Video` | Windows: MP4, M4V or WebM over loopback; Mac: native-supported files such as H.264/AAC MP4 read directly |
+
+On Mac, local playback uses AVFoundation below the shared dashboard. The native fullscreen button also works with Control-Command-F. Player view exposes a seek bar for the native player.
 
 Local videos repeat from the beginning after reaching the end. Keep the drive connected and the file accessible. The app does not copy the video into the repository or load the entire file into RAM.
 

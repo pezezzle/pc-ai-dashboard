@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Dashboard.Core/Dashboard.Core.csproj" />
+    <Project Path="src/Dashboard.Agent/Dashboard.Agent.csproj" />
     <Project Path="src/PcAiDashboard/PcAiDashboard.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -8,7 +8,7 @@ The source and Windows package contain credential lookup code, not the publisher
 
 Do not copy `.codex/auth.json`, `.claude/.credentials.json`, Desktop authentication caches, or the dashboard's application data into the repository. Build outputs, settings, diagnostics, and logs are excluded. Ignore rules do not remove secrets from history; inspect history before publishing.
 
-Settings, WebView2 data, limited logs, and Claude Code usage files stay in `%LOCALAPPDATA%\PcAiDashboard`. Diagnostics exclude authentication tokens but can contain session labels and hardware information. Review them before sharing.
+On Windows, settings, WebView2 data, limited logs, and Claude Code usage files stay in `%LOCALAPPDATA%\PcAiDashboard`. On macOS they stay in `~/Library/Application Support/PcAiDashboard`; native menu/panel preferences use the app's own UserDefaults domain. Mac credential lookup reads only dedicated Claude Code/Claude Desktop OAuth stores and their existing Keychain entries; Keychain access denial is respected. Diagnostics exclude authentication tokens but can contain session labels and hardware information. Review them before sharing.
 
 ## Network and hardware
 

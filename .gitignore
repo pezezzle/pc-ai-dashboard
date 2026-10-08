@@ -18,3 +18,7 @@ test-results/
 **/auth.json
 **/.credentials.json
 **/WebView2/
+
+**/.build/
+**/.swiftpm/
+*.dSYM/

@@ -12,10 +12,12 @@ public record CreditUsage(string Status, double? Balance = null, string Unit = "
 public record ManualResetUsage(long AvailableCount, long? NextExpiresAt = null);
 public record AiUsage(string Name, string Status, List<Quota> Quotas, List<SessionUsage> Sessions, DateTimeOffset? UpdatedAt = null, string? Detail = null, CreditUsage? Credits = null, ManualResetUsage? ManualResets = null);
 public record DisplayInfo(string Id, string Label, int Width, int Height, int X, int Y, bool Primary);
-public record DashboardSnapshot(DateTimeOffset Time, List<Metric> Metrics, List<DriveUsage> Drives, List<AiUsage> Ai, string HardwareStatus);
+public record DashboardSnapshot(DateTimeOffset Time, List<Metric> Metrics, List<DriveUsage> Drives, List<AiUsage> Ai, string HardwareStatus, DashboardCapabilities? Capabilities = null);
+public record DashboardCapabilities(string Platform, bool Cooling, bool Fans, bool ScreenSaver);
 
 public sealed class DashboardSettings
 {
+    public string Profile { get; set; } = "desktop";
     public string DisplayId { get; set; } = "";
     public bool Fullscreen { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
@@ -50,6 +52,7 @@ public sealed class DashboardSettings
     public string ClaudeSessionId { get; set; } = "";
     public static DashboardSettings Validate(DashboardSettings s)
     {
+        if (s.Profile is not ("desktop" or "notebook")) s.Profile = "desktop";
         s.Volume = Math.Clamp(s.Volume, 0, 100);
         s.ScreenSaverIdleMinutes = Math.Clamp(s.ScreenSaverIdleMinutes, 1, 240);
         s.ScreenSaverDashboardDisplayIds = s.ScreenSaverDashboardDisplayIds?.Where(id => !string.IsNullOrWhiteSpace(id))
@@ -69,17 +72,19 @@ public sealed class DashboardSettings
 
 public static class AppFiles
 {
-    public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PcAiDashboard");
+    public static readonly string Root = OperatingSystem.IsMacOS()
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "PcAiDashboard")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PcAiDashboard");
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     public static void Log(string message)
     {
         try { Directory.CreateDirectory(Root); var p=Path.Combine(Root,"app.log"); if(File.Exists(p) && new FileInfo(p).Length > 2_000_000) File.Move(p,p+".previous",true); File.AppendAllText(p,$"{DateTimeOffset.Now:O} {message}{Environment.NewLine}"); } catch { }
     }
-    public static DashboardSettings LoadSettings()
+    public static DashboardSettings LoadSettings(DashboardSettings? defaults = null)
     {
         Directory.CreateDirectory(Root);
         try { return DashboardSettings.Validate(JsonSerializer.Deserialize<DashboardSettings>(File.ReadAllText(Path.Combine(Root,"settings.json")),Json) ?? new()); }
-        catch { return new(); }
+        catch { return defaults ?? new(); }
     }
     public static void SaveSettings(DashboardSettings s)
     {

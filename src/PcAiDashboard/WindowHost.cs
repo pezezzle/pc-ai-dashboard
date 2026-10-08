@@ -33,7 +33,7 @@ public partial class MainWindow : Window
     internal MainWindow(MainWindow? owner, DisplayInfo? display)
     {
         dashboardOwner=owner; screenSaverDisplay=display;
-        hardware=owner?.hardware??new(); ai=owner?.ai??new();
+        hardware=owner?.hardware??new(); ai=owner?.ai??new(new WindowsAiPlatform());
         videoServer=owner?.videoServer??new(Origin);
         settings=owner?.settings??AppFiles.LoadSettings();
         InitializeComponent();

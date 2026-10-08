@@ -20,7 +20,7 @@ public sealed class ScreenSaverController : IDisposable
 
     public bool IsActive => windows.Count > 0;
     public static bool ShowsDashboard(string displayId, IReadOnlyCollection<string>? selected)
-        => selected == null || selected.Contains(displayId, StringComparer.OrdinalIgnoreCase);
+        => ScreenSaverPolicy.ShowsDashboard(displayId, selected);
     public ScreenSaverController(MainWindow dashboard)
     {
         this.dashboard = dashboard;
@@ -32,8 +32,7 @@ public sealed class ScreenSaverController : IDisposable
     }
 
     public static bool ShouldStart(bool enabled, int minutes, uint now, uint lastInput, long sinceStop)
-        => enabled && unchecked(now - lastInput) >= Math.Clamp(minutes, 1, 240) * 60_000L
-            && sinceStop >= Math.Clamp(minutes, 1, 240) * 60_000L;
+        => ScreenSaverPolicy.ShouldStart(enabled, minutes, now, lastInput, sinceStop);
 
     public void Start()
     {

@@ -1,5 +1,32 @@
 # Build and test status
 
+## 1.1.0 Mac notebook extension — 2026-10-08
+
+- Portable .NET core/helper and the existing Windows host compile on macOS;
+  Windows runtime behavior was not re-tested here.
+- 62 portable data/protocol/media checks pass, including synthetic-only RPC
+  mutation rejection and macOS Desktop-cache decryption tests.
+- Twelve Swift tests pass for menu reset states, quota-window labeling and sensor decoding.
+- All 44 Chromium/WebKit UI test runs pass (22 scenarios per engine).
+- Native pinned panel and WKWebView dashboard were visually reviewed with
+  synthetic AI data. CPU/GPU utilization and both temperature groups, RAM,
+  memory pressure, battery and storage were read on the M3 MacBook Air.
+- Native media regression passes for a 12-second synthetic H.264/AAC fixture
+  and the selected 7.4 GB / 7:33:59 MP4 on a mounted drive: advancing playback,
+  precise seek to about 4:55:05, continued playback, pause/resume and native
+  fullscreen entry/exit with camera-safe geometry. The synthetic video was
+  visually verified behind the shared dashboard. Full-length playback was not observed.
+- Native lifecycle regression verifies deallocation of the web view and native
+  player after close, hide, minimize and fullscreen close, successful reopening,
+  opt-in background playback, and release when the option is disabled while
+  hidden. No hidden hardware sampling remains; the menu/AI polling stays active.
+- Live account checks are read-only. No manual reset was triggered, no inference
+  was requested and no login/account state was changed.
+- The local ad-hoc-signed app bundle is produced by `Build-Mac.sh`; this is not
+  a notarized distribution or an installer. See [Mac setup](MAC.md).
+
+The older Windows live verification below describes version 1.0.3.
+
 Last verified: **2026-10-08**. Application version: **1.0.3**. Earlier media/audio verification was performed on 2026-10-06.
 
 ## Build workflow

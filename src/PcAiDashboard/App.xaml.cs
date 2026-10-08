@@ -12,7 +12,7 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) => { AppFiles.Log("Unhandled: "+args.Exception.GetType().Name+" "+args.Exception.Message); args.Handled=true; };
         if(e.Args.Length>=2 && e.Args[0]=="--diagnostics")
         {
-            using var hardware=new HardwareService(); using var ai=new AiService();
+            using var hardware=new HardwareService(); using var ai=new AiService(new WindowsAiPlatform());
             for(int i=0;i<25;i++) { await Task.Delay(1000); if(i>3 && ai.Read().All(a=>a.Status!="Verbinden")) break; }
             hardware.Read(AppFiles.LoadSettings()); await Task.Delay(1100);
             var data=hardware.Read(AppFiles.LoadSettings());

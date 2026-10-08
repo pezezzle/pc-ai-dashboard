@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $executable = Join-Path $PSScriptRoot 'artifacts\app\PcAiDashboard.exe'
-$icon = Join-Path $PSScriptRoot 'assets\branding\pc-ai-dashboard.ico'
+$icon = Join-Path $PSScriptRoot 'assets\branding\dashboard-icon.ico'
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw 'Build the app first with .\Build.ps1 -Publish.'
 }

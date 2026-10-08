@@ -5,11 +5,10 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Globalization;
 using System.Net;
-using Microsoft.Win32;
 
 namespace PcAiDashboard;
 
-public sealed class AiService : IDisposable
+public sealed class AiService : IDisposable, IAsyncDisposable
 {
     private readonly CancellationTokenSource stop=new();
     private readonly HttpClient http=new() { Timeout=TimeSpan.FromSeconds(15) };
@@ -17,7 +16,11 @@ public sealed class AiService : IDisposable
     private AiUsage codex=new("Codex","Verbinden",[],[]),claude=new("Claude","Verbinden",[],[]);
     private static readonly string Home=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     private DateTimeOffset claudeRetryAt;
-    public AiService()=>_=Task.Run(Poll);
+    private readonly IAiPlatform platform;
+    private readonly bool readSessions;
+    private readonly Task pollTask;
+    public AiService(IAiPlatform platform, bool readSessions = true)
+    { this.platform = platform; this.readSessions = readSessions; pollTask=Task.Run(Poll); }
     public List<AiUsage> Read() { lock(gate) return [codex,claude]; }
     private async Task Poll()
     {
@@ -29,10 +32,10 @@ public sealed class AiService : IDisposable
     }
     private async Task UpdateCodex()
     {
-        var sessions=ReadCodexSessions();
+        var sessions=readSessions ? ReadCodexSessions() : [];
         try
         {
-            var exe=FindCodex();
+            var exe=platform.FindCodex();
             if(exe==null) throw new FileNotFoundException("Codex CLI fehlt");
             using var process=new Process { StartInfo=new(exe) { UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true } };
             process.StartInfo.ArgumentList.Add("app-server");
@@ -41,10 +44,10 @@ public sealed class AiService : IDisposable
             using var timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token); timeout.CancelAfter(20000);
             try
             {
-                await process.StandardInput.WriteLineAsync("{\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"pc_ai_dashboard\",\"version\":\"1.0.0\"}}}"); await process.StandardInput.FlushAsync();
+                await process.StandardInput.WriteLineAsync(CodexReadOnlyProtocol.Request("initialize", 1)); await process.StandardInput.FlushAsync();
                 await ReadResponse(process,1,timeout.Token);
-                await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\",\"params\":{}}");
-                await process.StandardInput.WriteLineAsync("{\"id\":2,\"method\":\"account/rateLimits/read\"}"); await process.StandardInput.FlushAsync();
+                await process.StandardInput.WriteLineAsync(CodexReadOnlyProtocol.Request("initialized"));
+                await process.StandardInput.WriteLineAsync(CodexReadOnlyProtocol.Request("account/rateLimits/read", 2)); await process.StandardInput.FlushAsync();
                 var response=await ReadResponse(process,2,timeout.Token);
                 if(response.TryGetProperty("error",out _)) throw new InvalidOperationException("Codex-Anmeldung prüfen");
                 var quotas=ParseCodexLimits(response.GetProperty("result"));
@@ -56,27 +59,6 @@ public sealed class AiService : IDisposable
         {
             lock(gate) codex=codex with { Status="Nicht erreichbar",Sessions=sessions,Detail=e is FileNotFoundException?"Codex CLI installieren und anmelden":"Codex-Anmeldung oder Verbindung prüfen" };
         }
-    }
-    public static string? FindCodex()
-    {
-        // The desktop app bundles a newer native client with reset-credit metadata.
-        // Read registered installation paths rather than changing the user's CLI.
-        try
-        {
-            using var packages=Registry.CurrentUser.OpenSubKey(@"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages");
-            foreach(var name in (packages?.GetSubKeyNames()??[]).Where(n=>n.StartsWith("OpenAI.Codex_",StringComparison.Ordinal))
-                .OrderByDescending(n=>Version.TryParse(n.Split('_').ElementAtOrDefault(1),out var version)?version:new Version()))
-            {
-                using var package=packages!.OpenSubKey(name);
-                if(package?.GetValue("PackageRootFolder") is not string folder) continue;
-                var bundled=Path.Combine(folder,"app","resources","codex.exe");
-                if(File.Exists(bundled)) return bundled;
-            }
-        }catch(Exception e) when(e is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
-        var npm=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"npm","node_modules","@openai");
-        if(Directory.Exists(npm)) { var exe=Directory.EnumerateFiles(npm,"codex.exe",SearchOption.AllDirectories).FirstOrDefault(); if(exe!=null) return exe; }
-        foreach(var dir in (Environment.GetEnvironmentVariable("PATH")??"").Split(Path.PathSeparator)) { var candidate=Path.Combine(dir,"codex.exe"); if(File.Exists(candidate)) return candidate; }
-        return null;
     }
     private static async Task<JsonElement> ReadResponse(Process p,int id,CancellationToken token)
     {
@@ -99,20 +81,20 @@ public sealed class AiService : IDisposable
                 long? reset=w.TryGetProperty("resetsAt",out var r)&&r.TryGetInt64(out var epoch)?epoch:null;
                 var label=mins==10080?"7 Tage":mins==300?"5 Stunden":mins.HasValue?$"{mins} Minuten":key=="primary"?"Limit":"Weiteres Limit";
                 if(bucketName!="codex") label=bucketName+" · "+label;
-                quotas.Add(new(label,Math.Clamp(percent,0,100),reset,mins));
+                if (double.IsFinite(percent)) quotas.Add(new(label,Math.Clamp(percent,0,100),reset,mins));
             }
         }
     }
     private async Task UpdateClaude()
     {
-        var sessions=ReadClaudeSessions();
+        var sessions=readSessions ? ReadClaudeSessions() : [];
         if(DateTimeOffset.UtcNow<claudeRetryAt) { lock(gate) claude=claude with { Sessions=sessions }; return; }
         try
         {
-            var credentials=ClaudeCredentials.Find() ?? throw new IOException("Keine gültige Claude-Anmeldung");
+            var credentials=await platform.FindClaudeCredentials(stop.Token) ?? throw new IOException("Keine gültige Claude-Anmeldung");
             var access=credentials.Token;
             using var req=new HttpRequestMessage(HttpMethod.Get,"https://api.anthropic.com/api/oauth/usage");
-            req.Headers.Authorization=new AuthenticationHeaderValue("Bearer",access); req.Headers.Add("anthropic-beta","oauth-2025-04-20"); req.Headers.UserAgent.ParseAdd("PC-AI-Dashboard/1.0");
+            req.Headers.Authorization=new AuthenticationHeaderValue("Bearer",access); req.Headers.Add("anthropic-beta","oauth-2025-04-20"); req.Headers.UserAgent.ParseAdd("PC-AI-Dashboard/1.1");
             using var response=await http.SendAsync(req,stop.Token);
             if(response.StatusCode==HttpStatusCode.TooManyRequests)
             {
@@ -129,8 +111,8 @@ public sealed class AiService : IDisposable
         }
         catch(Exception) when(!stop.IsCancellationRequested)
         {
-            var local=ReadClaudeStatusLimits();
-            lock(gate) claude=local!=null?claude with {Name="Claude",Status="Sitzungsdaten",Quotas=local.Value.Quotas,Sessions=sessions,Detail="Werte aus Claude Code; Guthaben ist letzter bekannter Stand"}:claude with { Status="Nicht erreichbar",Sessions=sessions,Detail="Claude Code anmelden; lokale Statuszeile liefert zusätzlich Kontextdaten" };
+            var local=readSessions ? ReadClaudeStatusLimits() : null;
+            lock(gate) claude=local!=null?claude with {Name="Claude",Status="Sitzungsdaten",Quotas=local.Value.Quotas,Sessions=sessions,UpdatedAt=local.Value.Time,Detail="Werte aus Claude Code; Guthaben ist letzter bekannter Stand"}:claude with { Status="Nicht erreichbar",Sessions=sessions,Detail="Claude Code oder Claude Desktop anmelden; lokale Statuszeile liefert zusätzlich Kontextdaten" };
         }
     }
     public static List<Quota> ParseClaudeLimits(JsonElement data)
@@ -142,7 +124,7 @@ public sealed class AiService : IDisposable
             if(field.Value.ValueKind!=JsonValueKind.Object || !field.Value.TryGetProperty("utilization",out var u) || !u.TryGetDouble(out var used)) continue;
             var label=field.Name switch { "five_hour"=>"5 Stunden", "seven_day"=>"7 Tage", "seven_day_sonnet"=>"7 Tage · Sonnet", "seven_day_opus"=>"7 Tage · Opus", _=>"7 Tage · "+field.Name[9..].Replace('_',' ') };
             long? reset=field.Value.TryGetProperty("resets_at",out var r) && DateTimeOffset.TryParse(r.GetString(),out var t)?t.ToUnixTimeSeconds():null;
-            q.Add(new(label,Math.Clamp(used,0,100),reset));
+            if (double.IsFinite(used)) q.Add(new(label,Math.Clamp(used,0,100),reset,field.Name=="five_hour"?300:10080));
         }
         return q;
     }
@@ -262,4 +244,10 @@ public sealed class AiService : IDisposable
             return(q,new DateTimeOffset(f.LastWriteTimeUtc)); }catch(Exception) { return null; }
     }
     public void Dispose() { stop.Cancel(); http.Dispose(); }
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+        try { await pollTask; }
+        catch (Exception e) when (stop.IsCancellationRequested && e is OperationCanceledException or ObjectDisposedException) { }
+    }
 }

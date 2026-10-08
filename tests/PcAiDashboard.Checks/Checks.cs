@@ -9,22 +9,22 @@ static class Checks
         int count=0;
         void Assert(bool test,string name) { if(!test) throw new Exception(name); Console.WriteLine("PASS "+name); count++; }
         var bytes=new byte[327]; bytes[0x3d]=0x0e; bytes[0x3e]=0xa6;
-        Assert(HardwareService.OctoTemperature(bytes,0)==37.5,"OCTO temperature is big-endian in hundredths");
+        Assert(HardwareProtocol.OctoTemperature(bytes,0)==37.5,"OCTO temperature is big-endian in hundredths");
         bytes[0x3f]=0x7f; bytes[0x40]=0xff;
-        Assert(HardwareService.OctoTemperature(bytes,1)==null,"Disconnected temperature is unavailable");
+        Assert(HardwareProtocol.OctoTemperature(bytes,1)==null,"Disconnected temperature is unavailable");
         bytes[0xe0]=0x07; bytes[0xe1]=0xd0;
-        Assert(HardwareService.OctoRpm(bytes,7)==2000,"Last OCTO fan channel is decoded correctly");
-        Assert(HardwareService.OctoRpm([],0)==null && HardwareService.OctoTemperature(bytes,5)==null,"Truncated report and invalid channel are rejected");
+        Assert(HardwareProtocol.OctoRpm(bytes,7)==2000,"Last OCTO fan channel is decoded correctly");
+        Assert(HardwareProtocol.OctoRpm([],0)==null && HardwareProtocol.OctoTemperature(bytes,5)==null,"Truncated report and invalid channel are rejected");
         bytes[0x7d]=0x11;bytes[0x7e]=0xf4;bytes[0xd8]=0x27;bytes[0xd9]=0x10;
-        Assert(HardwareService.OctoDuty(bytes,0)==45.96 && HardwareService.OctoDuty(bytes,7)==100,"Actual OCTO PWM decodes in centi-percent with the correct channel stride");
+        Assert(HardwareProtocol.OctoDuty(bytes,0)==45.96 && HardwareProtocol.OctoDuty(bytes,7)==100,"Actual OCTO PWM decodes in centi-percent with the correct channel stride");
         bytes[0x7d]=0xff;bytes[0x7e]=0xff;
-        Assert(HardwareService.OctoDuty(bytes,0)==null && HardwareService.OctoDuty([],0)==null,"Invalid and truncated PWM data stays unavailable rather than showing 100 percent");
+        Assert(HardwareProtocol.OctoDuty(bytes,0)==null && HardwareProtocol.OctoDuty([],0)==null,"Invalid and truncated PWM data stays unavailable rather than showing 100 percent");
         var now=DateTimeOffset.Now;
         string Export(DateTimeOffset time,string value)=>$"<LogDataExport><ExportTime>{time:O}</ExportTime><Logdata><LogDataSet><name>CPU Package</name><value>{value}</value><unit>°C</unit></LogDataSet></Logdata></LogDataExport>";
         CultureInfo.CurrentCulture=CultureInfo.GetCultureInfo("de-DE");
-        Assert(HardwareService.ParseExport("\uFEFF"+Export(now,"57.5"),now).Single().Value==57.5,"Export handles BOM and German Windows culture");
-        Assert(HardwareService.ParseExport(Export(now.AddSeconds(-12),"57"),now).Count==0,"Stale Aquasuite export never appears live");
-        Assert(HardwareService.ParseExport(Export(now,"NaN"),now).Single().Value==null,"Non-finite measurements are unavailable");
+        Assert(HardwareProtocol.ParseExport("\uFEFF"+Export(now,"57.5"),now).Single().Value==57.5,"Export handles BOM and German Windows culture");
+        Assert(HardwareProtocol.ParseExport(Export(now.AddSeconds(-12),"57"),now).Count==0,"Stale Aquasuite export never appears live");
+        Assert(HardwareProtocol.ParseExport(Export(now,"NaN"),now).Single().Value==null,"Non-finite measurements are unavailable");
         using var codex=JsonDocument.Parse("""{"rateLimits":{"primary":{"usedPercent":1}},"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1791580407},"secondary":null}}}""");
         var quotas=AiService.ParseCodexLimits(codex.RootElement);
         Assert(quotas.Count==1 && quotas[0].Label=="7 Tage" && quotas[0].UsedPercent==100,"Codex multi-bucket quotas take precedence without duplicates");
@@ -68,14 +68,14 @@ static class Checks
         Assert(DashboardSettings.Validate(new(){ScreenSaverIdleMinutes=0}).ScreenSaverIdleMinutes==1 && DashboardSettings.Validate(new(){ScreenSaverIdleMinutes=999}).ScreenSaverIdleMinutes==240,"Screensaver wait time is bounded between one minute and four hours");
         var saverSettings=JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(new DashboardSettings { ScreenSaverTimerEnabled=true,ScreenSaverIdleMinutes=37 },AppFiles.Json),AppFiles.Json)!;
         Assert(saverSettings.ScreenSaverTimerEnabled && saverSettings.ScreenSaverIdleMinutes==37,"Screensaver timer state and wait time survive restart serialization");
-        Assert(saverDefaults.ScreenSaverDashboardDisplayIds==null && ScreenSaverController.ShowsDashboard("screen3",null),"Existing settings show dashboard cards on every screensaver monitor");
-        Assert(ScreenSaverController.ShowsDashboard("SCREEN3",["screen3"]) && !ScreenSaverController.ShowsDashboard("screen1",["screen3"]) && !ScreenSaverController.ShowsDashboard("screen1",[]),"Explicit dashboard selections are case-insensitive; unselected monitors show only the background");
+        Assert(saverDefaults.ScreenSaverDashboardDisplayIds==null && ScreenSaverPolicy.ShowsDashboard("screen3",null),"Existing settings show dashboard cards on every screensaver monitor");
+        Assert(ScreenSaverPolicy.ShowsDashboard("SCREEN3",["screen3"]) && !ScreenSaverPolicy.ShowsDashboard("screen1",["screen3"]) && !ScreenSaverPolicy.ShowsDashboard("screen1",[]),"Explicit dashboard selections are case-insensitive; unselected monitors show only the background");
         var displaySelection=DashboardSettings.Validate(new(){ScreenSaverDashboardDisplayIds=["screen3","SCREEN3","", "screen1"]});
         var displayRestored=JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(displaySelection,AppFiles.Json),AppFiles.Json)!;
         Assert(displayRestored.ScreenSaverDashboardDisplayIds!.SequenceEqual(new[]{"screen3","screen1"}) && DashboardSettings.Validate(new(){ScreenSaverDashboardDisplayIds=[]}).ScreenSaverDashboardDisplayIds!.Count==0,"Dashboard monitor selection is cleaned, persisted, and preserves the all-video option");
-        Assert(!ScreenSaverController.ShouldStart(false,1,60000,0,60000) && !ScreenSaverController.ShouldStart(true,1,60000,59000,60000),"Disabled timers and recent input anywhere in the session prevent automatic start");
-        Assert(ScreenSaverController.ShouldStart(true,1,60000,0,60000) && !ScreenSaverController.ShouldStart(true,1,60000,0,1000),"An idle session starts at the threshold; dismissal prevents immediate re-entry");
-        Assert(ScreenSaverController.ShouldStart(true,1,30000,uint.MaxValue-30000,60000),"Idle detection handles Windows tick counter wraparound");
+        Assert(!ScreenSaverPolicy.ShouldStart(false,1,60000,0,60000) && !ScreenSaverPolicy.ShouldStart(true,1,60000,59000,60000),"Disabled timers and recent input anywhere in the session prevent automatic start");
+        Assert(ScreenSaverPolicy.ShouldStart(true,1,60000,0,60000) && !ScreenSaverPolicy.ShouldStart(true,1,60000,0,1000),"An idle session starts at the threshold; dismissal prevents immediate re-entry");
+        Assert(ScreenSaverPolicy.ShouldStart(true,1,30000,uint.MaxValue-30000,60000),"Idle detection handles Windows tick counter wraparound");
         var restored=JsonSerializer.Deserialize<DashboardSettings>(saved,AppFiles.Json)!;
         Assert(restored.Accent=="#ff00ff" && restored.TextColor=="#eecc88", "Both colors survive settings serialization");
         const long large=7_430_854_813;
@@ -84,6 +84,9 @@ static class Checks
         Assert(!LocalVideoServer.TryRange("bytes=99999999999999999999-",large,out _,out _) && !LocalVideoServer.TryRange("bytes=5-2",large,out _,out _),"Overflow and backwards media ranges are rejected");
         CheckMediaHttp(Assert).GetAwaiter().GetResult();
         CheckConcurrentMedia(Assert).GetAwaiter().GetResult();
+        CheckMacWebOrigin(Assert).GetAwaiter().GetResult();
+        ReadOnlyChecks.Run(Assert).GetAwaiter().GetResult();
+        Assert(new DashboardSettings().Profile=="desktop" && DashboardSettings.Validate(new(){Profile="bad"}).Profile=="desktop", "Windows keeps the stationary profile by default; invalid profiles are rejected");
         Console.WriteLine($"{count} checks passed."); return 0;
     }
     private static async Task CheckMediaHttp(Action<bool,string> Assert)
@@ -108,6 +111,40 @@ static class Checks
             using var unknown=await http.GetAsync(new Uri(new Uri(server.Url),"/unknown"));
             Assert(denied.StatusCode==System.Net.HttpStatusCode.Forbidden && unknown.StatusCode==System.Net.HttpStatusCode.NotFound,"Foreign origins and unknown paths cannot read the selected video");
         }finally {System.IO.File.Delete(fixture);}
+    }
+
+    private static async Task CheckMacWebOrigin(Action<bool,string> Assert)
+    {
+        var root=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"dashboard-web-"+Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(root);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root,"index.html"),"<html>fixture</html>");
+            System.IO.File.WriteAllText(System.IO.Path.Combine(root,"private.json"),"private fixture");
+            var media=System.IO.Path.Combine(root,"fixture.mp4"); System.IO.File.WriteAllBytes(media,[0,1,2,3]);
+            using var server=new LocalVideoServer(null,root); server.Configure(media);
+            using var http=new HttpClient { Timeout=TimeSpan.FromSeconds(5) };
+            var entry=new Uri(server.DashboardUrl); var video=new Uri(server.Url);
+            using var page=await http.GetAsync(entry);
+            Assert(entry.Host=="localhost" && entry.GetLeftPart(UriPartial.Authority)==video.GetLeftPart(UriPartial.Authority) &&
+                page.IsSuccessStatusCode && page.Content.Headers.ContentType?.MediaType=="text/html" &&
+                await page.Content.ReadAsStringAsync()=="<html>fixture</html>","Mac UI and video share a private loopback origin with correct asset content types");
+            using var origin=new HttpRequestMessage(HttpMethod.Get,server.Url); origin.Headers.Add("Origin",entry.GetLeftPart(UriPartial.Authority));
+            using var response=await http.SendAsync(origin);
+            Assert(response.IsSuccessStatusCode,"Mac media accepts its own dashboard origin");
+            using var foreign=new HttpRequestMessage(HttpMethod.Get,entry); foreign.Headers.Add("Origin","https://example.com");
+            using var denied=await http.SendAsync(foreign);
+            using var hidden=await http.GetAsync(new Uri(entry,"private.json"));
+            using var traversal=await http.GetAsync(new Uri(entry,"../private.json"));
+            using var write=await http.PostAsync(entry,new StringContent("change"));
+            Assert(denied.StatusCode==System.Net.HttpStatusCode.Forbidden && hidden.StatusCode==System.Net.HttpStatusCode.NotFound &&
+                traversal.StatusCode==System.Net.HttpStatusCode.NotFound && write.StatusCode==System.Net.HttpStatusCode.MethodNotAllowed,
+                "Loopback web server rejects foreign origins, unlisted files, traversal and writes");
+            var old=server.Url; server.Configure("");
+            using var retired=await http.GetAsync(old); using var stillAvailable=await http.GetAsync(entry);
+            Assert(retired.StatusCode==System.Net.HttpStatusCode.NotFound && stillAvailable.IsSuccessStatusCode,"Changing media invalidates old media URLs without stopping the dashboard UI");
+        }
+        finally { System.IO.Directory.Delete(root,true); }
     }
 
     private static async Task CheckConcurrentMedia(Action<bool,string> Assert)

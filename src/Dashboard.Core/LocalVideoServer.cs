@@ -18,14 +18,28 @@ public sealed class LocalVideoServer : IDisposable
     private readonly SemaphoreSlim slots = new(32);
     private readonly string secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
     private readonly string origin;
+    private readonly string baseUrl;
+    private readonly string? webRoot;
+    private readonly string webPrefix;
+    private static readonly Dictionary<string, string> webAssets = new(StringComparer.Ordinal)
+    {
+        ["index.html"] = "text/html; charset=utf-8", ["main.js"] = "text/javascript; charset=utf-8",
+        ["styles.css"] = "text/css; charset=utf-8", ["dashboard.css"] = "text/css; charset=utf-8",
+        ["notebook.css"] = "text/css; charset=utf-8", ["dashboard-icon.svg"] = "image/svg+xml"
+    };
     private volatile Media? selected;
     private record Media(string Path, string Route);
     public string Url { get; private set; } = "";
 
-    public LocalVideoServer(string origin)
+    public string DashboardUrl => webRoot == null ? "" : baseUrl + webPrefix + "index.html";
+
+    public LocalVideoServer(string? origin, string? webRoot = null)
     {
-        this.origin = origin;
+        this.webRoot = webRoot == null ? null : Path.GetFullPath(webRoot);
+        webPrefix = $"/{secret}/ui/";
         listener.Start();
+        baseUrl = $"http://{(origin == null ? "localhost" : "127.0.0.1")}:{((IPEndPoint)listener.LocalEndpoint).Port}";
+        this.origin = origin ?? baseUrl;
         _ = AcceptRequests();
     }
 
@@ -34,7 +48,7 @@ public sealed class LocalVideoServer : IDisposable
         if (selected?.Path == path) return;
         var route = $"/{secret}/{Guid.NewGuid():N}";
         selected = string.IsNullOrWhiteSpace(path) ? null : new(path, route);
-        Url = selected == null ? "" : $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}{route}";
+        Url = selected == null ? "" : baseUrl + route;
     }
 
     private async Task AcceptRequests()
@@ -76,7 +90,10 @@ public sealed class LocalVideoServer : IDisposable
                 var lines = Encoding.ASCII.GetString(header.ToArray()).Split("\r\n");
                 var request = lines[0].Split(' ');
                 var media = selected;
-                if (request.Length != 3 || media == null || request[1] != media.Route)
+                var asset = request.Length == 3 && webRoot != null && request[1].StartsWith(webPrefix, StringComparison.Ordinal)
+                    ? request[1][webPrefix.Length..] : "";
+                var isAsset = webRoot != null && webAssets.ContainsKey(asset);
+                if (request.Length != 3 || (!isAsset && (media == null || request[1] != media.Route)))
                 { await Reply(network, 404, "Not Found", 0, "", timeout.Token); return; }
                 var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var line in lines.Skip(1)) { int colon = line.IndexOf(':'); if (colon > 0) headers[line[..colon]] = line[(colon + 1)..].Trim(); }
@@ -86,13 +103,15 @@ public sealed class LocalVideoServer : IDisposable
                 { await Reply(network, 204, "No Content", 0, "Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range\r\nAccess-Control-Allow-Private-Network: true\r\n", timeout.Token); return; }
                 if (request[0] is not ("GET" or "HEAD"))
                 { await Reply(network, 405, "Method Not Allowed", 0, "Allow: GET, HEAD, OPTIONS\r\n", timeout.Token); return; }
-                await using var file = new FileStream(media.Path, FileMode.Open, FileAccess.Read,
+                var path = isAsset ? Path.Combine(webRoot!, asset) : media!.Path;
+                if (!File.Exists(path)) { await Reply(network, 404, "Not Found", 0, "", timeout.Token); return; }
+                await using var file = new FileStream(path, FileMode.Open, FileAccess.Read,
                     FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.Asynchronous);
                 var length = file.Length;
                 var partial = headers.TryGetValue("Range", out var range);
                 if (!TryRange(range, length, out var start, out var end))
                 { await Reply(network, 416, "Range Not Satisfiable", 0, $"Content-Range: bytes */{length}\r\n", timeout.Token); return; }
-                string mime = Path.GetExtension(media.Path).Equals(".webm", StringComparison.OrdinalIgnoreCase) ? "video/webm" : "video/mp4";
+                string mime = isAsset ? webAssets[asset] : Path.GetExtension(path).Equals(".webm", StringComparison.OrdinalIgnoreCase) ? "video/webm" : "video/mp4";
                 var extra = $"Content-Type: {mime}\r\nAccept-Ranges: bytes\r\n";
                 if (partial) extra += $"Content-Range: bytes {start}-{end}/{length}\r\n";
                 await Reply(network, partial ? 206 : 200, partial ? "Partial Content" : "OK", end - start + 1, extra, timeout.Token);

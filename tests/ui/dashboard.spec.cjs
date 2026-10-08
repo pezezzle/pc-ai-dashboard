@@ -88,7 +88,7 @@ test('portrait video fills the viewport and dashboard selection affects only sav
   await expect(page.locator('#stage')).toBeVisible();await expect(page.locator('.toolbar')).toBeVisible();
 });
 test.beforeEach(async ({ page }) => {
-  await page.goto(pathToFileURL(path.resolve('src/PcAiDashboard/Web/index.html')).href);
+  await page.goto(pathToFileURL(path.resolve('ui/web/index.html')).href);
   await page.evaluate(s => window.dashboardTest.applyConfiguration({settings:s,displays:[{id:'test',label:'Test · 1024 × 600'}]}),settings);
 });
 test('all requested measurements fit the small display; unavailable values stay explicit',async ({page}) => {
@@ -186,4 +186,9 @@ test('stale manual reset values are not presented as confirmed availability',asy
   }
   await page.evaluate(()=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[],drives:[],ai:[{name:'Codex',status:'Live',updatedAt:new Date().toISOString(),quotas:[],sessions:[],manualResets:{availableCount:2,nextExpiresAt:null}}],hardwareStatus:'Test'}));
   await expect(page.locator('#codex-card .manual-reset')).not.toHaveClass(/stale/);await expect(page.locator('#codex-card .manual-reset')).toContainText('2 manuelle Resets verfügbar');await expect(page.locator('#codex-card .manual-reset')).not.toContainText('Bis ');
+});
+
+test('Windows settings omit the native Mac background retention option',async({page})=>{
+  await page.locator('#settings-button').click();
+  await expect(page.locator('#keep-dashboard-background')).not.toBeVisible();
 });

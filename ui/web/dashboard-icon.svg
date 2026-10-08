@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>AI Dashboard</title>
+  <rect x="80" y="80" width="864" height="864" rx="188" fill="#F3F6FA"/>
+  <rect x="248" y="260" width="528" height="504" rx="64" fill="none" stroke="#24384B" stroke-width="42"/>
+  <rect x="326" y="338" width="152" height="24" rx="12" fill="#24384B"/>
+  <circle cx="690" cy="350" r="12" fill="#3BA99C"/>
+  <rect x="334" y="530" width="76" height="150" rx="16" fill="#3BA99C"/>
+  <rect x="474" y="434" width="76" height="246" rx="16" fill="#4C82D5"/>
+  <rect x="614" y="486" width="76" height="194" rx="16" fill="#8BB3EB"/>
+</svg>

@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.1.0 — 2026-10-08
+
+- Replace mute/play toolbar characters with accessible monochrome SVG symbols.
+- Default Mac dashboard close/hide/minimize to releasing the video and web view;
+  add a persisted opt-in background setting in native and dashboard settings.
+- Stop hardware sampling when all Mac panels are hidden, and verify resource
+  release/reopen behavior in an isolated native lifecycle regression.
+
+- Fix stalled large local videos on Mac with native AVFoundation playback and
+  shared play/pause, audio and seek controls. Preserve selected files/settings.
+- Fix Mac fullscreen entry/exit and camera-safe geometry; support Control-Command-F.
+- Serve bundled Mac UI assets from a private loopback entry with strict bridge
+  trust, and add an account-free native media/fullscreen regression mode.
+
+- Render provider menu symbols as transparent native vector glyphs, using the
+  macOS foreground color instead of colored app-icon images.
+
+- Replace CX/CL menu labels with original provider app icons; preserve usage,
+  quota-window labels, accessible provider names and read-only reset availability.
+
+- Add used/total storage and a capacity bar to the native System panel.
+- Replace the app branding with a light, flat vector design, including native
+  Mac app/menu icons, Windows executable/shortcut icons and the shared header.
+
+- Extract portable .NET models, AI polling/parsing, read-only account protocol,
+  sensor decoding and local media serving into `Dashboard.Core`; keep Windows
+  credential/device integrations in the existing WPF host.
+- Add a native macOS menu-bar app with Codex/Claude usage, visible manual-reset
+  availability, stale-state markers, pinnable panels and a larger WKWebView dashboard.
+- Add a platform-independent notebook profile and move shared HTML/CSS/generated
+  JavaScript to `ui/web`; keep the stationary 1024 × 600 display and Windows saver.
+- Read Mac CPU/GPU usage, temperature zones, RAM, memory pressure, battery and
+  storage without sensor/fan writes; omit absent notebook cooling controllers.
+- Read Claude Code Keychain credentials and dedicated Claude Desktop OAuth caches
+  on macOS. Respect existing status lines and offer an explicit context integration.
+- Forbid manual-reset redemption through an outbound RPC allow-list. Verify it
+  with a synthetic server and test menu availability, stale state and missing windows.
+- Add Mac packaging/CI and Chromium/WebKit UI checks. Avoid replacing unchanged
+  saver-button text during input blur, which cancelled clicks in WebKit.
+
+
 Versions refer to source and Windows packages. They do not imply a published GitHub Release.
 
 ## Unreleased
