@@ -7,15 +7,16 @@
 [![TypeScript 5.9](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Windows x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4)](docs/SETUP.md)
 
-Windows dashboard for a small HDMI monitor inside a PC. Displays hardware telemetry, Claude and Codex account usage, credit balances when available, and chat context measurements over a local video or YouTube background. Development version **1.0.2**. The host uses C# / .NET 10 and WPF; the interface uses TypeScript in WebView2. The user interface is German; source comments, tests, build messages, and documentation are English.
+Windows dashboard for a small HDMI monitor inside a PC. Displays hardware telemetry, Claude and Codex account usage, credit balances when available, and chat context measurements over a local video or YouTube background. Development version **1.0.3**. The host uses C# / .NET 10 and WPF; the interface uses TypeScript in WebView2. The user interface is German; source comments, tests, build messages, and documentation are English.
 
-**Project status:** The Windows build, all 29 data/protocol checks, and all 7 interface tests pass. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
+**Project status:** The Windows build, all 34 data/protocol checks, and all 10 interface tests pass. A 7.4 GB local MP4 was verified with seeking, audio controls, and automatic playback after restart. Both appearance colors were verified across a full process restart. See [Build and test status](docs/BUILD_AND_TEST_STATUS.md) for the tested environment and limitations.
 
 ## Features
 
 - CPU package temperature and total usage; GPU core temperature and usage; physical RAM and fixed-drive storage usage.
 - Pump, radiator, and case temperatures with a labeled, configurable degree scale; pump RPM and top, side, bottom, and rear fan RPM with actual OCTO PWM rings.
 - Claude and Codex account usage windows, reset countdowns, provider-reported credit balances, and per-session context measurements.
+- A prominent Codex banner for banked manual limit resets, including the available count and a known expiry date.
 - Larger account/storage text and storage percentages with two decimal places using German number formatting, such as `72,34 %`.
 - Looping local MP4/WebM backgrounds and an embedded YouTube player with playback, volume, and mute controls.
 - Monitor selection, fullscreen, tray controls, optional Windows autostart, and automatically saved accent/text colors, card opacity, and background dimming.
@@ -47,6 +48,8 @@ There is currently no published GitHub Release or installer. Build artifacts are
 ## AI usage and context
 
 The large quota percentage shows **usage already consumed**: `100%` used and `0%` remaining are consistent. The reset countdown comes from the provider. Account limits refresh every 60 seconds without starting a model request.
+
+When Codex reports banked manual resets, its card shows **1 manueller Reset verfügbar** (or the available count), separate from the automatic reset countdown. Check and redeem the reset yourself in Codex under usage. The dashboard only displays availability; it never consumes a reset. Older clients may omit reset metadata, and outdated values are marked as the last known state. Expiry is shown only when returned by the provider.
 
 The credit row shows Codex credit points or a Claude currency balance when the provider returns it. Claude monthly spending and its cap are shown separately; unused monthly budget is never treated as prepaid balance. When an OAuth response omits the balance, the card says **Nicht abrufbar**. Failed requests retain the last known values with a stale indication; Claude rate limiting temporarily pauses polling.
 

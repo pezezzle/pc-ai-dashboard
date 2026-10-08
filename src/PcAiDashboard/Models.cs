@@ -9,7 +9,8 @@ public record Quota(string Label, double UsedPercent, long? ResetsAt, int? Windo
 public record SessionUsage(string Id, string Label, double? UsedPercent, long? Tokens, long? Capacity, DateTimeOffset UpdatedAt);
 public record CreditUsage(string Status, double? Balance = null, string Unit = "Credits", bool Unlimited = false,
     double? Spent = null, double? Limit = null, bool Enabled = true, string? Detail = null);
-public record AiUsage(string Name, string Status, List<Quota> Quotas, List<SessionUsage> Sessions, DateTimeOffset? UpdatedAt = null, string? Detail = null, CreditUsage? Credits = null);
+public record ManualResetUsage(long AvailableCount, long? NextExpiresAt = null);
+public record AiUsage(string Name, string Status, List<Quota> Quotas, List<SessionUsage> Sessions, DateTimeOffset? UpdatedAt = null, string? Detail = null, CreditUsage? Credits = null, ManualResetUsage? ManualResets = null);
 public record DisplayInfo(string Id, string Label, int Width, int Height, int X, int Y, bool Primary);
 public record DashboardSnapshot(DateTimeOffset Time, List<Metric> Metrics, List<DriveUsage> Drives, List<AiUsage> Ai, string HardwareStatus);
 

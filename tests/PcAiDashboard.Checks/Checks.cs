@@ -34,6 +34,17 @@ static class Checks
         Assert(AiService.ParseCodexCredits(credits.RootElement)?.Balance==44651.02745925,"Codex decimal credit strings parse independently of German Windows culture");
         using var unlimited=JsonDocument.Parse("""{"rateLimitsByLimitId":{"codex":{"credits":{"hasCredits":true,"unlimited":true,"balance":null}}}}""");
         Assert(AiService.ParseCodexCredits(unlimited.RootElement)?.Unlimited==true && AiService.ParseCodexCredits(absent.RootElement)==null,"Unlimited and missing Codex credits remain distinct");
+        using var resets=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":3,"credits":[{"id":"example","status":"available","resetType":"codexRateLimits","expiresAt":1794007296},{"status":"redeemed","resetType":"codexRateLimits","expiresAt":1},{"status":"available","resetType":"unknown","expiresAt":2},{"status":"available","resetType":"codexRateLimits","expiresAt":1793007296}]}}""");
+        Assert(AiService.ParseCodexManualResets(resets.RootElement)==new ManualResetUsage(3,1793007296),"Reset counts use the summary and expiry ignores redeemed or unrelated credits");
+        using var summaryOnly=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":2,"credits":null}}""");
+        Assert(AiService.ParseCodexManualResets(summaryOnly.RootElement)==new ManualResetUsage(2),"Missing reset details do not erase the available count or invent an expiry");
+        using var noResets=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":0,"credits":[]}}""");
+        Assert(AiService.ParseCodexManualResets(noResets.RootElement)?.AvailableCount==0 && AiService.ParseCodexManualResets(absent.RootElement)==null,"Zero available resets and unsupported reset metadata remain distinct");
+        using var invalidResets=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":-1}}""");
+        using var textResets=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":"1"}}""");
+        Assert(AiService.ParseCodexManualResets(invalidResets.RootElement)==null && AiService.ParseCodexManualResets(textResets.RootElement)==null,"Malformed reset counts never appear available");
+        using var invalidExpiry=JsonDocument.Parse("""{"rateLimitResetCredits":{"availableCount":1,"credits":[{"status":"available","resetType":"codexRateLimits","expiresAt":9223372036854775807}]}}""");
+        Assert(AiService.ParseCodexManualResets(invalidExpiry.RootElement)==new ManualResetUsage(1),"Out-of-range reset expiry stays unknown without discarding a valid count");
         using var claude=JsonDocument.Parse("""{"five_hour":{"utilization":22.5,"resets_at":"2026-10-09T21:13:27Z"},"seven_day":null,"seven_day_sonnet":{"utilization":48,"resets_at":null}}""");
         var cq=AiService.ParseClaudeLimits(claude.RootElement);
         Assert(cq.Count==2 && cq[0].ResetsAt==1791580407 && cq[1].ResetsAt==null,"Claude scoped windows and optional resets are preserved");

@@ -76,3 +76,29 @@ test('missing balance remains explicit and degree scale changes preserve measure
   await expect(page.locator('[data-temp-max]').first()).toHaveText('80 °C');
   await expect(page.locator('[data-metric="coolantPump"]')).toHaveText('40,0');
 });
+
+test('manual reset banner is prominent without clipping account data',async ({page})=> {
+  await page.evaluate(()=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[],drives:[],ai:[{name:'Codex',status:'Live',updatedAt:new Date().toISOString(),quotas:[{label:'7 Tage',usedPercent:36,resetsAt:Date.now()/1000+90000}],sessions:[{id:'1',label:'Test',tokens:57027,capacity:380000,usedPercent:15,updatedAt:new Date().toISOString()}],credits:{balance:33755.73,unit:'Credits'},manualResets:{availableCount:1,nextExpiresAt:Math.floor(Date.now()/1000)+86400*20}},{name:'Claude',status:'Live',updatedAt:new Date().toISOString(),quotas:[{label:'5 Stunden',usedPercent:10,resetsAt:Date.now()/1000+3000},{label:'7 Tage',usedPercent:30,resetsAt:Date.now()/1000+90000}],sessions:[]}],hardwareStatus:'Test'}));
+  const banner=page.locator('#codex-card .manual-reset');
+  await expect(banner).toBeVisible();await expect(banner).toContainText('1 manueller Reset verfügbar');await expect(banner).toContainText('In Codex → Nutzung einlösen');await expect(banner).toContainText('Bis ');
+  await expect(page.locator('#codex-card .credit-line strong')).toContainText('33.755,73 Credits');await expect(page.locator('#codex-card .context-value strong')).toHaveText('15%');
+  expect(await page.locator('#codex-card').evaluate(e=>e.scrollHeight<=e.clientHeight&&e.scrollWidth<=e.clientWidth)).toBe(true);
+  expect(await page.locator('#claude-card .quotas').evaluate(e=>e.scrollHeight<=e.clientHeight)).toBe(true);
+  await page.screenshot({path:'artifacts/manual-reset-preview.png'});
+});
+
+test('automatic reset countdown and unavailable manual metadata never advertise a manual reset',async ({page})=> {
+  for(const manualResets of [null,{availableCount:0,nextExpiresAt:null}]) {
+    await page.evaluate(manualResets=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[],drives:[],ai:[{name:'Codex',status:'Live',updatedAt:new Date().toISOString(),quotas:[{label:'7 Tage',usedPercent:100,resetsAt:Math.floor(Date.now()/1000)-10}],sessions:[],manualResets}],hardwareStatus:'Test'}),manualResets);
+    await expect(page.locator('#codex-card .manual-reset')).not.toBeVisible();await expect(page.locator('#codex-card .quota-detail')).toContainText('Reset fällig');
+  }
+});
+
+test('stale manual reset values are not presented as confirmed availability',async ({page})=> {
+  for(const state of [{status:'Nicht erreichbar',updatedAt:new Date().toISOString(),nextExpiresAt:null},{status:'Live',updatedAt:new Date(Date.now()-180000).toISOString(),nextExpiresAt:null},{status:'Live',updatedAt:new Date().toISOString(),nextExpiresAt:Math.floor(Date.now()/1000)-1}]) {
+    await page.evaluate(state=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[],drives:[],ai:[{name:'Codex',...state,quotas:[],sessions:[],manualResets:{availableCount:2,nextExpiresAt:state.nextExpiresAt}}],hardwareStatus:'Test'}),state);
+    await expect(page.locator('#codex-card .manual-reset')).toHaveClass(/stale/);await expect(page.locator('#codex-card .manual-reset')).toContainText('Letzter Stand: 2 Resets');await expect(page.locator('#codex-card .manual-reset')).not.toContainText('verfügbar');
+  }
+  await page.evaluate(()=>window.dashboardTest.render({time:new Date().toISOString(),metrics:[],drives:[],ai:[{name:'Codex',status:'Live',updatedAt:new Date().toISOString(),quotas:[],sessions:[],manualResets:{availableCount:2,nextExpiresAt:null}}],hardwareStatus:'Test'}));
+  await expect(page.locator('#codex-card .manual-reset')).not.toHaveClass(/stale/);await expect(page.locator('#codex-card .manual-reset')).toContainText('2 manuelle Resets verfügbar');await expect(page.locator('#codex-card .manual-reset')).not.toContainText('Bis ');
+});

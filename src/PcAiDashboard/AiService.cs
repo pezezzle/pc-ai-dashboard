@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Globalization;
 using System.Net;
+using Microsoft.Win32;
 
 namespace PcAiDashboard;
 
@@ -47,7 +48,7 @@ public sealed class AiService : IDisposable
                 var response=await ReadResponse(process,2,timeout.Token);
                 if(response.TryGetProperty("error",out _)) throw new InvalidOperationException("Codex-Anmeldung prüfen");
                 var quotas=ParseCodexLimits(response.GetProperty("result"));
-                lock(gate) codex=new("Codex","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Kein Zeitlimit vom Account geliefert":null,ParseCodexCredits(response.GetProperty("result")));
+                lock(gate) codex=new("Codex","Live",quotas,sessions,DateTimeOffset.Now,quotas.Count==0?"Kein Zeitlimit vom Account geliefert":null,ParseCodexCredits(response.GetProperty("result")),ParseCodexManualResets(response.GetProperty("result")));
             }
             finally { if(!process.HasExited) process.Kill(true); await process.WaitForExitAsync(); await errorDrain; }
         }
@@ -58,6 +59,20 @@ public sealed class AiService : IDisposable
     }
     public static string? FindCodex()
     {
+        // The desktop app bundles a newer native client with reset-credit metadata.
+        // Read registered installation paths rather than changing the user's CLI.
+        try
+        {
+            using var packages=Registry.CurrentUser.OpenSubKey(@"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages");
+            foreach(var name in (packages?.GetSubKeyNames()??[]).Where(n=>n.StartsWith("OpenAI.Codex_",StringComparison.Ordinal))
+                .OrderByDescending(n=>Version.TryParse(n.Split('_').ElementAtOrDefault(1),out var version)?version:new Version()))
+            {
+                using var package=packages!.OpenSubKey(name);
+                if(package?.GetValue("PackageRootFolder") is not string folder) continue;
+                var bundled=Path.Combine(folder,"app","resources","codex.exe");
+                if(File.Exists(bundled)) return bundled;
+            }
+        }catch(Exception e) when(e is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
         var npm=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"npm","node_modules","@openai");
         if(Directory.Exists(npm)) { var exe=Directory.EnumerateFiles(npm,"codex.exe",SearchOption.AllDirectories).FirstOrDefault(); if(exe!=null) return exe; }
         foreach(var dir in (Environment.GetEnvironmentVariable("PATH")??"").Split(Path.PathSeparator)) { var candidate=Path.Combine(dir,"codex.exe"); if(File.Exists(candidate)) return candidate; }
@@ -141,6 +156,23 @@ public sealed class AiService : IDisposable
         bool has=credits.TryGetProperty("hasCredits",out var h) && h.ValueKind==JsonValueKind.True;
         double? balance=Number(credits,"balance",true);
         return new("Live",balance,"Credits",unlimited,Detail:unlimited?null:balance.HasValue?null:has?"Guthaben vorhanden; Betrag nicht bereitgestellt":"Kein Credits-Guthaben");
+    }
+    public static ManualResetUsage? ParseCodexManualResets(JsonElement data)
+    {
+        if(!data.TryGetProperty("rateLimitResetCredits",out var summary) || summary.ValueKind!=JsonValueKind.Object ||
+            !summary.TryGetProperty("availableCount",out var available) || available.ValueKind!=JsonValueKind.Number ||
+            !available.TryGetInt64(out var count) || count<0) return null;
+        long? expires=null;
+        if(count>0 && summary.TryGetProperty("credits",out var credits) && credits.ValueKind==JsonValueKind.Array)
+            foreach(var credit in credits.EnumerateArray())
+            {
+                if(credit.ValueKind!=JsonValueKind.Object || !credit.TryGetProperty("status",out var status) || status.ValueKind!=JsonValueKind.String || status.GetString()!="available" ||
+                    !credit.TryGetProperty("resetType",out var type) || type.ValueKind!=JsonValueKind.String || type.GetString()!="codexRateLimits") continue;
+                if(credit.TryGetProperty("expiresAt",out var time) && time.ValueKind==JsonValueKind.Number && time.TryGetInt64(out var epoch) && epoch>0 && epoch<=253402300799)
+                    expires=expires.HasValue?Math.Min(expires.Value,epoch):epoch;
+            }
+        // Counts are authoritative: detail lists can be missing or truncated.
+        return new(count,expires);
     }
     public static CreditUsage? ParseClaudeCredits(JsonElement data)
     {

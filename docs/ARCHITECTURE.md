@@ -23,6 +23,8 @@ The host pushes snapshots once per second. Provider account queries run every si
 
 `CreditUsage` keeps a funded balance separate from optional monthly spending and limits. Codex numerical strings are parsed with invariant culture. Claude money fields use their declared currency and exponent; absent balances remain null. OCTO fan metrics include independent RPM and PWM readings for each assigned channel. The interface uses PWM percentages for rings and degree-based scales for temperature bars.
 
+`ManualResetUsage` contains only the available count and earliest known expiry. It is read from Codex's rate-limit response, without retaining reset credit IDs or adding a consume action. The banner uses the existing quota region's vertical budget; multiple Codex quota rows remain scrollable. Claude's two-window layout is unchanged. Failed polls retain the last known reset summary, which the interface marks as unverified.
+
 `ui/main.ts` is the maintained source. `npm run build` generates the committed `Web/main.js`. CI fails if rebuilding changes the generated file.
 
 ## Local media transport

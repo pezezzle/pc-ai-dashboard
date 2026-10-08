@@ -9,7 +9,8 @@ let browser;
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.waitForFunction(() => latest?.ai.some(a => a.name === 'Codex' && a.status === 'Live' && a.credits?.balance != null), {}, { timeout: 30000 });
   const inspect = () => page.evaluate(() => ({
-    ai: latest.ai.map(a => ({name:a.name,status:a.status,updatedAt:a.updatedAt,balanceAvailable:a.credits?.balance != null,unit:a.credits?.unit})),
+    ai: latest.ai.map(a => ({name:a.name,status:a.status,updatedAt:a.updatedAt,balanceAvailable:a.credits?.balance != null,unit:a.credits?.unit,manualResets:a.manualResets})),
+    manualResetBanner: {visible:!document.querySelector('#codex-card .manual-reset').hidden,text:document.querySelector('#codex-card .manual-reset').textContent},
     rings: [...document.querySelectorAll('.fan-meter')].map(e => ({id:e.dataset.duty,value:latest.metrics.find(m=>m.id===e.dataset.duty)?.value,dash:e.querySelector('.fan-meter-fill').style.strokeDasharray})),
     drives: [...document.querySelectorAll('.drive-title strong')].map(e=>e.textContent),
     clipped: [...document.querySelectorAll('.ai-card,.disks-card,.fan-card')].filter(e=>e.scrollHeight>e.clientHeight||e.scrollWidth>e.clientWidth).map(e=>e.id||e.className),
@@ -25,6 +26,12 @@ let browser;
   }
   assert(first.drives.length>0); for(const drive of first.drives) assert.match(drive,/^\d+,\d{2} %$/);
   assert.deepEqual(first.clipped, []);
+  const resets=first.ai.find(a=>a.name==='Codex').manualResets;
+  if(resets?.availableCount>0) {
+    assert.equal(first.manualResetBanner.visible,true);
+    assert(first.manualResetBanner.text.includes(String(resets.availableCount)) && first.manualResetBanner.text.includes('verfügbar'), 'Live reset count not displayed');
+    assert(first.manualResetBanner.text.includes('In Codex'), 'Manual reset instructions missing');
+  } else assert.equal(first.manualResetBanner.visible,false);
   for(const t of first.temperature) assert(Math.abs(t.height/t.total-t.value/first.settings.temperatureScaleMax)<.03, 'Temperature bar scale mismatch');
   assert.equal(first.video.paused,false); assert.equal(first.video.error,null); assert.equal(first.video.loop,true);
   console.log('Live PWM, storage decimals, provider credit availability, layout, and looping large video:', JSON.stringify(first));

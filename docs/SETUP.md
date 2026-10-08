@@ -10,7 +10,7 @@
 | Cooling controller | Aqua Computer OCTO for the current direct USB sensor adapter |
 | CPU package temperature | Aquasuite with an active XML export |
 | GPU telemetry | NVIDIA GPU and `nvidia-smi` available through the installed driver |
-| Codex account limits | Signed-in Codex CLI with a Windows-native `codex.exe` |
+| Codex account limits | Signed-in Codex desktop app or CLI with a Windows-native `codex.exe` |
 | Claude account limits | A valid Claude Code or Claude Desktop OAuth session |
 | Claude Code context | Node.js and the dashboard's Claude Code status-line integration |
 | Source builds | .NET 10 SDK, Node.js, npm; Microsoft Edge for interface tests |
@@ -64,11 +64,15 @@ The adapter reads OCTO HID input reports only. It never sends configuration or s
 
 ### Codex
 
-The app locates the native CLI in the standard npm installation or on `PATH`. It starts `codex app-server`, initializes the connection, reads `account/rateLimits/read`, and closes the child process. No inference request is made. Sign-in remains managed by the Codex CLI.
+The app first checks the current user's registered Codex desktop installation for its bundled native client. Otherwise, it locates the CLI in the standard npm installation or on `PATH`. It starts `codex app-server`, initializes the connection, reads `account/rateLimits/read`, and closes the child process. No inference request is made. Sign-in remains managed by Codex; the dashboard does not install or upgrade either client.
 
 Usage windows and reset times come from the provider response. Missing windows are omitted rather than displayed as zero usage. The app does not reset or increase an account allowance.
 
 The same response supplies `credits.balance`, `hasCredits`, and `unlimited` when available. The balance is displayed as credit points, not currency, with two decimal places. Missing numerical balances remain explicitly unavailable. Account usage and credits refresh every sixty seconds.
+
+Newer clients also return `rateLimitResetCredits`. Its `availableCount` drives the manual-reset banner; the count is authoritative even when detail rows are omitted or truncated. The earliest known expiry among available `codexRateLimits` credits is shown when supplied. Opaque credit identifiers are not retained or sent to the interface. Missing metadata is not treated as zero resets. A saved reset does not imply it can be redeemed in every account state; check Codex's usage controls before redeeming. The dashboard does not call the consume method or redeem anything automatically.
+
+Reset banking is described in the [official June 2026 changelog](https://learn.chatgpt.com/docs/changelog). The local bundled client version 0.160.1 was verified to expose this metadata; the older npm CLI version 0.131.0 omitted it.
 
 Context comes from recent `token_count` measurements in the tails of local `.codex/sessions` files. The app retains usage metadata, not conversation text. The timestamp identifies the last measured input; an idle chat does not receive continuous context measurements.
 

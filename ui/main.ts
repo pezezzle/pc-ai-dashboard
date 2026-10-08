@@ -3,7 +3,7 @@ interface DriveUsage { name: string; label: string; usedGb: number; totalGb: num
 interface Quota { label: string; usedPercent: number; resetsAt: number | null }
 interface SessionUsage { id: string; label: string; usedPercent: number | null; tokens: number | null; capacity: number | null; updatedAt: string }
 interface CreditUsage { status: string; balance: number | null; unit: string; unlimited: boolean; spent: number | null; limit: number | null; enabled: boolean; detail: string | null }
-interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null; credits?: CreditUsage | null }
+interface AiUsage { name: string; status: string; quotas: Quota[]; sessions: SessionUsage[]; updatedAt: string | null; detail: string | null; credits?: CreditUsage | null; manualResets?: {availableCount: number; nextExpiresAt: number | null} | null }
 interface Snapshot { time: string; metrics: Metric[]; drives: DriveUsage[]; ai: AiUsage[]; hardwareStatus: string }
 interface Settings { [key: string]: string | number | boolean; backgroundMode: string; youtubeUrl: string; localVideoPath: string; muted: boolean; volume: number; dim: number; cardOpacity: number; accent: string; textColor: string; fullscreen: boolean; displayId: string; codexSessionId: string; claudeSessionId: string }
 interface DisplayInfo { id: string; label: string }
@@ -90,6 +90,7 @@ function renderAi(provider: AiUsage): void {
   }
   if (!provider.quotas.length) container.append(element('div', 'empty', provider.detail ?? 'Noch keine Account-Limits verfügbar'));
   container.scrollTop = scroll;
+  renderManualResets(card, provider);
   renderCredits(card, provider);
   const select = card.querySelector<HTMLSelectElement>('.session-select')!;
   const key = name + 'SessionId'; const signature = JSON.stringify(provider.sessions.map(s => [s.id, s.label]));
@@ -102,6 +103,22 @@ function renderAi(provider: AiUsage): void {
     const detail = session.capacity != null ? `${fmt(session.tokens)} / ${fmt(session.capacity)}` : 'Letzte Eingabe';
     ctx.append(element('strong', '', label), element('span', '', detail), element('span', 'context-age', age(session.updatedAt))); ctx.title = 'Letzter gemessener Kontext · ' + new Date(session.updatedAt).toLocaleString('de-DE');
   } else ctx.append(element('span', '', name === 'claude' ? 'Ab nächster Claude-Code-Sitzung' : 'Noch keine lokalen Sitzungsdaten'));
+}
+
+function renderManualResets(card: HTMLElement, provider: AiUsage): void {
+  const banner = card.querySelector<HTMLElement>('.manual-reset'); if (!banner) return;
+  const reset = provider.manualResets;
+  const visible = reset != null && Number.isSafeInteger(reset.availableCount) && reset.availableCount > 0;
+  banner.hidden = !visible; card.classList.toggle('has-manual-resets', visible);
+  banner.replaceChildren(); if (!visible || !reset) return;
+  const stale = provider.status !== 'Live' || provider.updatedAt == null || Date.now() - new Date(provider.updatedAt).getTime() > 120000 || (reset.nextExpiresAt != null && reset.nextExpiresAt * 1000 <= Date.now());
+  banner.classList.toggle('stale', stale);
+  const title = stale ? `Letzter Stand: ${fmt(reset.availableCount)} Reset${reset.availableCount === 1 ? '' : 's'}` : `${fmt(reset.availableCount)} ${reset.availableCount === 1 ? 'manueller Reset' : 'manuelle Resets'} verfügbar`;
+  banner.append(element('strong', '', '↻ ' + title));
+  let detail = stale ? 'In Codex prüfen · ' + age(provider.updatedAt) : 'In Codex → Nutzung einlösen';
+  if (!stale && reset.nextExpiresAt != null) detail = 'Bis ' + new Date(reset.nextExpiresAt * 1000).toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit'}) + ' · ' + detail;
+  banner.append(element('span', '', detail));
+  banner.title = 'Gespeicherte manuelle Limit-Resets, getrennt vom automatischen Reset-Countdown. In Codex unter Nutzung prüfen und selbst auslösen. Diese Anzeige verbraucht keinen Reset.' + (reset.nextExpiresAt != null ? '\nBekanntes Ablaufdatum: ' + new Date(reset.nextExpiresAt * 1000).toLocaleString('de-DE') : '') + '\nLetzter Abruf: ' + age(provider.updatedAt);
 }
 
 function renderCredits(card: HTMLElement, provider: AiUsage): void {

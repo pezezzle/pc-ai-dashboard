@@ -14,6 +14,8 @@ Settings, WebView2 data, limited logs, and Claude Code usage files stay in `%LOC
 
 The app contacts AI providers for usage and YouTube when selected. Hardware telemetry is not uploaded. Cooling access reads input reports only; it does not change speeds, fan curves, or controller settings.
 
+Codex manual-reset availability is read through the native client's account usage method. Reset IDs are not retained, and the dashboard does not redeem or consume resets. Client installation paths are read from the current user's Windows package registry with CLI fallbacks; no client installation or account configuration is changed.
+
 Local video streaming binds only to `127.0.0.1`, uses an unpredictable route, and serves the selected file. Foreign origins and unknown routes are rejected. The service stops when the app exits.
 
 CDP debugging is disabled during normal startup. Use it only for a dedicated local test process, close that process afterward, and remove its environment variable before normal use.

@@ -2,6 +2,14 @@
 
 Versions refer to source and Windows packages. They do not imply a published GitHub Release.
 
+## 1.0.3 — 2026-10-08
+
+- Add a prominent Codex banner for banked manual resets, with the available count and a known expiry date.
+- Keep manual availability separate from the automatic quota countdown and mark cached or expired metadata as unverified.
+- Prefer the native client bundled with a registered Codex desktop installation, which exposes reset metadata; retain the npm/PATH CLI fallback.
+- Read usage only: the dashboard never redeems or consumes a reset.
+- Expand verification to 34 data/protocol checks and 10 interface tests.
+
 ## 1.0.2 — 2026-10-06
 
 - Display Codex credit balances and Claude funded balances when provided, with monthly spending shown separately from prepaid funds.

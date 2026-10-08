@@ -1,6 +1,6 @@
 # Build and test status
 
-Last verified: **2026-10-06**. Application version: **1.0.2**.
+Last verified: **2026-10-08**. Application version: **1.0.3**. Earlier media/audio verification was performed on 2026-10-06.
 
 ## Build workflow
 
@@ -32,11 +32,12 @@ GitHub Actions runs the build, checks generated JavaScript consistency, runs the
 | Check | Result |
 |---|---|
 | Release build | Passed with zero warnings and errors |
-| Data and media protocol checks | 29 passed, including credit units, missing balances, and PWM decoding |
-| Edge interface tests | 7 passed, including two quota windows, credits, unclipped larger text, PWM rings, and storage decimals |
+| Data and media protocol checks | 34 passed, including reset counts, expiry filtering, credit units, missing balances, and PWM decoding |
+| Edge interface tests | 10 passed, including manual availability/staleness, two quota windows, credits, unclipped larger text, PWM rings, and storage decimals |
 | Live hardware | CPU, GPU, RAM, fixed-drive storage, OCTO temperatures, pump and four fan groups verified |
 | AI usage | Codex and Claude windows verified with valid provider sessions |
 | Credits and layout | Live Codex balance, Claude monthly spending with unavailable funded balance, all five PWM channels, two-decimal storage, and unclipped bottom cards verified |
+| Manual reset banner | Live available count and expiry verified with the bundled Codex client; no reset was consumed; video continued through another usage poll |
 | YouTube | Playback, mute/unmute, pause/resume, and unavailable-video errors verified |
 | Large MP4 | 7.4 GB, 7:33:59, H.264/AAC, 1280 × 720; playback and seek to 3:04:27 verified |
 | Media ranges | Live read beyond 4 GB; suffix ranges, `HEAD`, `206`, and `416` verified |
